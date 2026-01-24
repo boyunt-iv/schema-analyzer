@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Schema Analyzer AI Powered v1.12.7</title>
+    <title>Schema Analyzer AI Powered v1.13.3</title>
     
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -16,6 +16,9 @@
     <!-- Global Error Handler -->
     <script>
         window.onerror = function (msg, url, lineNo, columnNo, error) {
+            // Ignore ResizeObserver loop limit exceeded
+            if (msg.includes('ResizeObserver')) return false;
+            
             const container = document.createElement('div');
             container.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ef4444;color:white;padding:16px;z-index:99999;font-family:monospace;font-size:14px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);border-bottom: 2px solid #b91c1c;';
             container.innerHTML = `<strong>🔥 System Error Detected:</strong><br>${msg}<br><span style="opacity:0.8;font-size:12px;">Line: ${lineNo} | Column: ${columnNo}</span>`;
@@ -105,7 +108,7 @@
             <div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full text-center relative">
                 <i class="ph ph-database text-6xl text-blue-500 mb-4"></i>
                 <h1 class="text-2xl font-bold text-slate-800 mb-2">Schema Analyzer AI Powered</h1>
-                <p class="text-slate-500 mb-8">Version 1.12.7</p>
+                <p class="text-slate-500 mb-8">Version 1.13.3</p>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="border-2 border-dashed rounded-lg p-6 transition-colors relative cursor-pointer group"
@@ -115,7 +118,7 @@
                         <p class="font-semibold text-slate-700">1. Upload DDL File <span class="text-red-500">*</span></p>
                         <p class="text-xs text-slate-400 mt-1" v-if="!ddlFileName">Required (e.g. DDL_sample.sql)</p>
                         <p class="text-xs text-blue-600 font-bold mt-1" v-else><i class="ph ph-check"></i> {{ ddlFileName }}</p>
-                        <!-- Example Download (Removed .stop) -->
+                        <!-- Example Download -->
                         <div class="absolute bottom-2 right-2 pointer-events-auto z-10">
                             <button @click="downloadExampleDDL" class="text-[10px] text-blue-400 hover:text-blue-600 hover:underline">Download Example</button>
                         </div>
@@ -128,7 +131,7 @@
                         <p class="font-semibold text-slate-700">2. Upload Table Focus</p>
                         <p class="text-xs text-slate-400 mt-1" v-if="!csvFileName">Optional (CSV for filtering)</p>
                         <p class="text-xs text-green-600 font-bold mt-1" v-else><i class="ph ph-check"></i> {{ csvFileName }}</p>
-                        <!-- Example Download (Removed .stop) -->
+                        <!-- Example Download -->
                         <div class="absolute bottom-2 right-2 pointer-events-auto z-10">
                             <button @click="downloadExampleCSV" class="text-[10px] text-green-400 hover:text-green-600 hover:underline">Download Example</button>
                         </div>
@@ -149,7 +152,7 @@
 
                 <!-- Version Button -->
                 <button @click="showVersionModal = true" class="absolute bottom-4 right-4 text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
-                    <i class="ph ph-info"></i> v1.12.7
+                    <i class="ph ph-info"></i> v1.13.3
                 </button>
             </div>
         </div>
@@ -714,25 +717,22 @@
                 const filters = reactive({ focusOnly: false, tiers: new Set(), levels: new Set(), leafOnly: false, dynamicFlags: new Set() });
                 const customFlagNames = ref([]);
                 
-                // Version Info
+                // Version Info (Fixed: Defined inside setup)
                 const showVersionModal = ref(false);
                 const moduleVersions = reactive({
-                    'App Core': 'v1.12.7', // UPDATED
+                    'App Core': 'v1.13.2', // UPDATED (Hotfix)
                     'Upload': 'v1.5.1', 
-                    'AI Global': 'v2.3',
+                    'AI Global': 'v2.4 (Fix History Save)', // UPDATED
                     'AI Text-to-SQL': 'v1.3', 
                     'Child tree-view (Hierarchy)': 'v1.0',
-                    'Impact Analyst': 'v1.9', 
+                    'Impact Analyst': 'v1.10', 
                     'Data dict': 'v1.8', 
                     'Mock data': 'v1.1', 
-                    'SQL for application_id': 'v1.1',
+                    'SQL for application_id': 'v1.2', // UPDATED
                     'Filter': 'v1.2',
                     'Table list view': 'v1.4.0', 
                     'ER Diagram': 'v1.0'
                 });
-                // return { showVersionModal, moduleVersions };
-                // REMOVED useAppInfo helper to keep setup clean and avoid scope issues.
-                // const appInfo = useAppInfo();
 
                 // ---------------------------------------------------------
                 // 2. COMPUTED PROPERTIES
@@ -1240,7 +1240,8 @@ order_items,Group 2,3,,Y`;
                     const startTable = selectedTable.value.name; generatedSql.value = '';
                     if (startTable === 'application') { generatedSql.value = `SELECT * \nFROM ngl.application \nWHERE id = '<YOUR_APPLICATION_ID>';`; return; }
                     const meta = sqlMetadata.value[startTable];
-                    if (meta && meta.hasAppIdCol) { generatedSql.value = `SELECT * \nFROM ngl.${startTable} \nWHERE application_id = '<YOUR_APPLICATION_ID>';`; return; }
+                    // UPDATED v1.13.1: Removed ngl. prefix for query
+                    if (meta && meta.hasAppIdCol) { generatedSql.value = `SELECT * \nFROM ${startTable} \nWHERE application_id = '<YOUR_APPLICATION_ID>';`; return; }
                     let foundPath = null; const queue = [{ table: startTable, path: [] }]; const visited = new Set();
                     while (queue.length > 0) {
                         const { table, path } = queue.shift(); if (visited.has(table)) continue; visited.add(table);
@@ -1249,9 +1250,13 @@ order_items,Group 2,3,,Y`;
                         if (table === 'application') { foundPath = { table, path, type: 'table' }; break; }
                         if (m.parents) { for (const parent of m.parents) { if (!visited.has(parent.name)) queue.push({ table: parent.name, path: [...path, { from: table, to: parent.name, fk: parent.fk, ref: parent.ref }] }); } }
                     }
-                    if (!foundPath) { generatedSql.value = `/* No direct link to Application ID found. */\nSELECT * \nFROM ngl.${startTable} \nLIMIT 10;`; return; }
-                    let sql = `SELECT t0.* \nFROM ngl.${startTable} t0`;
-                    foundPath.path.forEach((edge, index) => { const aliasTo = `t${index+1}`; const refCol = edge.ref || 'id'; sql += `\nJOIN ngl.${edge.to} ${aliasTo} ON t${index}.${edge.fk} = ${aliasTo}.${refCol}`; });
+                    if (!foundPath) { 
+                        // UPDATED v1.13.1: Removed ngl. prefix
+                        generatedSql.value = `/* No direct link to Application ID found. */\nSELECT * \nFROM ${startTable} \nLIMIT 10;`; return; 
+                    }
+                    // UPDATED v1.13.1: Removed ngl. prefix
+                    let sql = `SELECT t0.* \nFROM ${startTable} t0`;
+                    foundPath.path.forEach((edge, index) => { const aliasTo = `t${index+1}`; const refCol = edge.ref || 'id'; sql += `\nJOIN ${edge.to} ${aliasTo} ON t${index}.${edge.fk} = ${aliasTo}.${refCol}`; });
                     const lastAlias = `t${foundPath.path.length}`;
                     if (foundPath.type === 'col') { sql += `\nWHERE ${lastAlias}.application_id = '<YOUR_APPLICATION_ID>';`; } else { sql += `\nWHERE ${lastAlias}.id = '<YOUR_APPLICATION_ID>';`; }
                     generatedSql.value = sql;
@@ -1260,7 +1265,9 @@ order_items,Group 2,3,,Y`;
                 const openSqlModal = () => { if(!selectedTable.value) return; generateQuery(); showSqlDialog.value = true; nextTick(() => hljs.highlightAll()); };
 
                 // ... Other Generators ...
-                const generateMockSQLRecursive = (tableName, visited = new Set()) => { if (visited.has(tableName)) return `-- [Recursion detected: ${tableName}]`; visited.add(tableName); let sql = ''; const meta = sqlMetadata.value[tableName]; const parents = meta?.parents || []; parents.forEach(p => { sql += generateMockSQLRecursive(p.name, new Set(visited)) + '\n'; }); const cols = extractColumnDetails(meta?.rawDDL); const requiredCols = cols.filter(c => c.isPk || c.notNull || c.isFk); if (!requiredCols.length) return sql + `-- No columns parsed for ${tableName}\n`; const colNames = requiredCols.map(c => c.name).join(', '); const values = requiredCols.map(c => generateRandomValue(c)).join(', '); sql += `INSERT INTO ngl.${tableName} (${colNames}) VALUES (${values});\n`; return sql; };
+                const generateMockSQLRecursive = (tableName, visited = new Set()) => { if (visited.has(tableName)) return `-- [Recursion detected: ${tableName}]`; visited.add(tableName); let sql = ''; const meta = sqlMetadata.value[tableName]; const parents = meta?.parents || []; parents.forEach(p => { sql += generateMockSQLRecursive(p.name, new Set(visited)) + '\n'; }); const cols = extractColumnDetails(meta?.rawDDL); const requiredCols = cols.filter(c => c.isPk || c.notNull || c.isFk); if (!requiredCols.length) return sql + `-- No columns parsed for ${tableName}\n`; const colNames = requiredCols.map(c => c.name).join(', '); const values = requiredCols.map(c => generateRandomValue(c)).join(', '); 
+                // UPDATED v1.12.1: Removed ngl. schema prefix
+                sql += `INSERT INTO ${tableName} (${colNames}) VALUES (${values});\n`; return sql; };
                 const generateRandomValue = (col) => { const t = col.type.toLowerCase(); if (t.includes('uuid')) return `'${faker.random.uuid()}'`; if (t.includes('int') || t.includes('serial')) return faker.random.number({min: 1, max: 1000}); if (t.includes('numeric') || t.includes('decimal')) return faker.finance.amount(); if (t.includes('char') || t.includes('text')) return `'${faker.lorem.word()}'`; if (t.includes('date')) return `'${faker.date.past().toISOString().split('T')[0]}'`; if (t.includes('time')) return `'${faker.date.recent().toISOString()}'`; if (t.includes('bool')) return faker.random.boolean(); return "'mock'"; };
                 const generateMockData = () => { if (!selectedTable.value) return; mockDataSql.value = generateMockSQLRecursive(selectedTable.value.name); };
                 const toggleImpactFlag = (flag) => { if(impactActiveFlags.has(flag)) impactActiveFlags.delete(flag); else impactActiveFlags.add(flag); };
@@ -1287,17 +1294,29 @@ order_items,Group 2,3,,Y`;
                     if(!userChatInput.value) return;
                     const userMsg = userChatInput.value;
                     chatMessages.value.push({ role: 'user', text: userMsg });
+                    
+                    // UPDATED v1.13.1: Save history immediately after user message
+                    saveChatHistory();
+
                     userChatInput.value = '';
                     const schemaContext = getCompactSchema();
                     const prompt = `You are a Senior Database Architect.\n\nINSTRUCTIONS:\n1. You have the FULL database schema below (Compressed Format).\n2. Use this GLOBAL knowledge to answer questions about relationships, data types, and cross-table impacts.\n3. Do not Hallucinate. Use ONLY the provided schema.\n4. If the answer is not in the schema, say so.\n5. IMPORTANT: Respond ONLY in Thai or English, depending on the user's question language. Do not use other languages like Korean or Vietnamese.\n\nGLOBAL SCHEMA CONTEXT:\n${schemaContext}\n\nUser Question: "${userMsg}"\n\nAnswer (Professional, Markdown, Thai/English ONLY):`;
                     const response = await callGemini(prompt);
                     chatMessages.value.push({ role: 'ai', text: response || "Sorry, I couldn't process that." });
+                    
+                    // UPDATED v1.13.1: Save history again after AI message
+                    saveChatHistory();
                 };
                 const generateSqlFromText = async () => {
                     if (!userQueryPrompt.value) return;
                     let prompt = "";
                     const targetDB = dbDialect.value === 'postgres' ? 'PostgreSQL' : 'Azure Databricks (Spark SQL)';
-                    const dbSpecificRules = dbDialect.value === 'postgres' ? "5. Use 'ngl.' prefix for all tables." : "5. Use 'ngl.' prefix. Use Spark SQL syntax.";
+                    
+                    // UPDATED v1.12.7: Removed ngl prefix constraint
+                    const dbSpecificRules = dbDialect.value === 'postgres' 
+                        ? "5. Do not use schema prefix (e.g. 'ngl.') unless explicitly requested." 
+                        : "5. Do not use schema prefix. Use Spark SQL syntax.";
+                    
                     const allTableNames = tables.value.map(t => t.name).join(", ");
                     if (selectedTable.value) {
                          const tableName = selectedTable.value.name;
@@ -1364,17 +1383,23 @@ order_items,Group 2,3,,Y`;
 
                     const buildNode = (tName, visited = new Set()) => {
                         if (visited.has(tName)) {
-                            return { name: tName + ' ⚠️ (Cycle)', children: [] };
+                            // UPDATED: Store realName separately to allow correct clicking
+                            return { name: tName + ' ⚠️ (Cycle)', realName: tName, children: [] };
                         }
                         visited.add(tName);
                         
                         const allChildren = relationships.value[tName] || [];
                         const validChildren = allChildren.filter(c => matches.has(c));
                         
+                        const t = tables.value.find(tbl => tbl.name === tName); // Get table info
+
                         return {
                             name: tName,
+                            realName: tName, // Store clean name
                             children: validChildren.map(child => buildNode(child, new Set(visited))),
-                            flags: tables.value.find(t => t.name === tName)?.flags 
+                            flags: t?.flags, 
+                            isFocus: t?.isFocus,
+                            group: t?.group // UPDATED: Added group info
                         };
                     };
 
@@ -1400,25 +1425,7 @@ order_items,Group 2,3,,Y`;
                     showImpactModal.value = false;
                 };
 
-                const useAppInfo = () => {
-                    const showVersionModal = ref(false);
-                    const moduleVersions = reactive({
-                        'App Core': 'v1.12.7',
-                        'Upload': 'v1.5.1',
-                        'AI Global': 'v2.2',
-                        'AI Text-to-SQL': 'v1.2',
-                        'Child tree-view (Hierarchy)': 'v1.0',
-                        'Impact Analyst': 'v1.3',
-                        'Data dict': 'v1.6',
-                        'Mock data': 'v1.0',
-                        'SQL for application_id': 'v1.0',
-                        'Filter': 'v1.2',
-                        'Table list view': 'v1.2',
-                        'ER Diagram': 'v1.0'
-                    });
-                    return { showVersionModal, moduleVersions };
-                };
-                const appInfo = useAppInfo();
+                // UPDATED v1.13.2: Removed Duplicate showVersionModal Declaration
 
                 return {
                     // State
@@ -1436,14 +1443,14 @@ order_items,Group 2,3,,Y`;
                     userChatInput, chatMessages, 
                     aiMode,
                     showDataDictModal, parsedColumns, 
-                    showImpactModal, impactSearchCol, impactResults, 
+                    showImpactModal, impactSearchCol, impactResults, filteredImpactResults, impactActiveFlags, impactFocusOnly, filteredImpactCount, // EXPORTED
                     showMockModal, mockDataSql,
                     impactSearchMode, totalImpactCount,
                     activeTriggers,
                     isProcessing,
                     customFlagNames, 
                     // App Info
-                    showVersionModal, moduleVersions: appInfo.moduleVersions,
+                    showVersionModal, moduleVersions,
                     
                     // Functions
                     handleDDLUpload, handleCSVUpload, processFiles, startProcess, reset,
@@ -1455,7 +1462,7 @@ order_items,Group 2,3,,Y`;
                     openAiModal, openGlobalAiModal, saveApiKey, generateInsight, generateSqlFromText, copyAiSql,
                     sendChatMessage, renderMarkdown,
                     openDataDictModal, exportDataDictCSV,
-                    openImpactModal, analyzeImpact, copyImpactList, selectByNameAndClose,
+                    openImpactModal, analyzeImpact, copyImpactList, selectByNameAndClose, toggleImpactFlag, clearImpactFilters, // EXPORTED
                     openMockModal, generateMockData, copyText,
                     // NEW Export
                     downloadExampleDDL, downloadExampleCSV, formatGroupBadge
