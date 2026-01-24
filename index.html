@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Schema Analyzer AI Powered v1.13.3</title>
+    <title>Schema Analyzer AI Powered v1.13.4</title>
     
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -108,7 +108,7 @@
             <div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full text-center relative">
                 <i class="ph ph-database text-6xl text-blue-500 mb-4"></i>
                 <h1 class="text-2xl font-bold text-slate-800 mb-2">Schema Analyzer AI Powered</h1>
-                <p class="text-slate-500 mb-8">Version 1.13.3</p>
+                <p class="text-slate-500 mb-8">Version 1.13.4</p>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="border-2 border-dashed rounded-lg p-6 transition-colors relative cursor-pointer group"
@@ -152,7 +152,7 @@
 
                 <!-- Version Button -->
                 <button @click="showVersionModal = true" class="absolute bottom-4 right-4 text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
-                    <i class="ph ph-info"></i> v1.13.3
+                    <i class="ph ph-info"></i> v1.13.4
                 </button>
             </div>
         </div>
@@ -557,7 +557,7 @@
                     <div v-if="isLoading" class="flex items-start"><div class="bg-white border border-slate-200 rounded-lg p-3 text-xs text-slate-400 animate-pulse">Thinking...</div></div>
                 </div>
                 <div class="flex gap-2">
-                    <input v-model="userChatInput" @keyup.enter="sendChatMessage" type="text" placeholder="Type your question..." class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none">
+                    <input ref="chatInput" v-model="userChatInput" @keyup.enter="sendChatMessage" type="text" placeholder="Type your question..." class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none">
                     <button @click="sendChatMessage" :disabled="isLoading || !userChatInput" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg"><i class="ph ph-paper-plane-right"></i></button>
                 </div>
             </div>
@@ -709,6 +709,8 @@
                 const dbDialect = ref('postgres');
                 const userChatInput = ref(''); 
                 const chatMessages = ref([]);
+                const chatContainer = ref(null); // UPDATED v1.13.4: Added ref for scrolling
+                const chatInput = ref(null); // UPDATED v1.13.4: Added ref for input focus
                 const aiMode = ref('table');
                 const aiContextTables = ref('');
 
@@ -717,18 +719,18 @@
                 const filters = reactive({ focusOnly: false, tiers: new Set(), levels: new Set(), leafOnly: false, dynamicFlags: new Set() });
                 const customFlagNames = ref([]);
                 
-                // Version Info (Fixed: Defined inside setup)
+                // Version Info (Fixed: Defined once inside setup)
                 const showVersionModal = ref(false);
                 const moduleVersions = reactive({
-                    'App Core': 'v1.13.2', // UPDATED (Hotfix)
+                    'App Core': 'v1.13.4', // UPDATED
                     'Upload': 'v1.5.1', 
-                    'AI Global': 'v2.4 (Fix History Save)', // UPDATED
+                    'AI Global': 'v2.5 (Auto-scroll & Trigger Context)', // UPDATED
                     'AI Text-to-SQL': 'v1.3', 
                     'Child tree-view (Hierarchy)': 'v1.0',
                     'Impact Analyst': 'v1.10', 
                     'Data dict': 'v1.8', 
                     'Mock data': 'v1.1', 
-                    'SQL for application_id': 'v1.2', // UPDATED
+                    'SQL for application_id': 'v1.2', 
                     'Filter': 'v1.2',
                     'Table list view': 'v1.4.0', 
                     'ER Diagram': 'v1.0'
@@ -909,7 +911,6 @@ CREATE TABLE order_items (
                 };
 
                 const downloadExampleCSV = () => {
-                    // UPDATED: Changed example headers
                     const content = `Table name,Group,Tier,important,is_transaction
 users,Group 1,1,Y,
 orders,Group 1,2,Y,Y
@@ -1211,6 +1212,16 @@ order_items,Group 2,3,,Y`;
                     activeAiTab.value = 'chat'; 
                     showAiModal.value = true; 
                     if(!userApiKey.value) showApiKeyInput.value = true; 
+                    
+                    // UPDATED v1.13.4: Auto scroll and focus
+                    nextTick(() => {
+                        if(chatContainer.value) {
+                             chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                        }
+                        if(chatInput.value) {
+                             chatInput.value.focus();
+                        }
+                    });
                 };
                 
                 const openMockModal = () => { if (!selectedTable.value) return; generateMockData(); showMockModal.value = true; };
@@ -1273,6 +1284,7 @@ order_items,Group 2,3,,Y`;
                 const toggleImpactFlag = (flag) => { if(impactActiveFlags.has(flag)) impactActiveFlags.delete(flag); else impactActiveFlags.add(flag); };
                 const clearImpactFilters = () => { impactActiveFlags.clear(); impactFocusOnly.value = false; };
 
+                // UPDATED v1.13.4: Include Triggers in compact schema for AI
                 const getCompactSchema = () => {
                     return tables.value.map(t => {
                         const meta = sqlMetadata.value[t.name];
@@ -1283,7 +1295,12 @@ order_items,Group 2,3,,Y`;
                             return str;
                         }).join(', ');
                         const parentStr = meta.parents.map(p => `${p.fk}->${p.name}`).join(', ');
-                        return `Table: ${t.name}\nCols: ${colStr}\nRefs: ${parentStr || 'None'}`;
+                        
+                        // NEW: Add trigger info
+                        const triggers = meta.triggers || [];
+                        const triggerStr = triggers.map(tr => `[TRG:${tr.event}] ${tr.name} (Exec:${tr.func||'Body'})`).join(', ');
+
+                        return `Table: ${t.name}\nCols: ${colStr}\nRefs: ${parentStr || 'None'}\nTriggers: ${triggerStr || 'None'}`;
                     }).join('\n\n');
                 };
 
@@ -1306,6 +1323,13 @@ order_items,Group 2,3,,Y`;
                     
                     // UPDATED v1.13.1: Save history again after AI message
                     saveChatHistory();
+
+                    // UPDATED v1.13.4: Scroll to bottom after new message
+                    nextTick(() => {
+                        if(chatContainer.value) {
+                             chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                        }
+                    });
                 };
                 const generateSqlFromText = async () => {
                     if (!userQueryPrompt.value) return;
@@ -1441,6 +1465,7 @@ order_items,Group 2,3,,Y`;
                     userQueryPrompt, aiSqlResponse, 
                     copySuccess, dbDialect, aiContextTables,
                     userChatInput, chatMessages, 
+                    chatContainer, chatInput, // UPDATED v1.13.4
                     aiMode,
                     showDataDictModal, parsedColumns, 
                     showImpactModal, impactSearchCol, impactResults, filteredImpactResults, impactActiveFlags, impactFocusOnly, filteredImpactCount, // EXPORTED
