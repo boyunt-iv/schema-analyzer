@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schema Analyzer AI Powered v1.08.3</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue.js -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- PapaParse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- Highlight.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <!-- Cytoscape.js for ER Diagram -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <!-- Markdown Parser (Marked) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Faker.js for Mock Data -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Faker/3.1.0/faker.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+        
+        body { font-family: 'Sarabun', sans-serif; }
+        .code-font { font-family: 'Fira Code', monospace; }
+        
+        /* Tree Lines */
+        .tree-line-v { position: absolute; left: 14px; top: 28px; bottom: 0; width: 1px; background-color: #cbd5e1; }
+        .tree-item:last-child > .tree-line-v { display: none; }
+        .tree-line-h { position: absolute; left: -18px; top: 18px; width: 20px; height: 1px; background-color: #cbd5e1; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        
+        .filter-btn { transition: all 0.2s ease; }
+        .filter-btn.active { transform: scale(1.05); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        /* Modal Transitions */
+        .modal-enter-active, .modal-leave-active { transition: opacity 0.3s ease; }
+        .modal-enter-from, .modal-leave-to { opacity: 0; }
+
+        /* Cytoscape Container Stack */
+        .cy-wrapper { position: relative; width: 100%; height: 100%; background-color: #f8fafc; overflow: hidden; }
+        #bgCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+        #cy { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+        .watermark {
+            position: fixed; bottom: 10px; right: 15px; font-size: 0.7rem; color: #94a3b8; opacity: 0.6;
+            pointer-events: none; z-index: 9999; font-style: italic; font-family: 'Sarabun', sans-serif;
+            text-shadow: 0 1px 1px rgba(255,255,255,0.8); user-select: none;
+        }
+
+        /* Markdown Styles */
+        .markdown-body { font-size: 0.9rem; line-height: 1.6; color: #334155; }
+        .markdown-body h3 { font-size: 1.1rem; font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; color: #1e293b; }
+        .markdown-body ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1em; }
+        .markdown-body li { margin-bottom: 0.25em; }
+        .markdown-body strong { color: #0f172a; font-weight: 600; }
+        .markdown-body code { background-color: #f1f5f9; padding: 2px 4px; rounded: 4px; font-family: 'Fira Code', monospace; font-size: 0.8em; color: #db2777; }
+        
+        .tab-btn.active { border-bottom-color: #7c3aed; color: #7c3aed; background-color: white; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen overflow-hidden flex flex-col">
+
+    <div id="app" class="h-full flex flex-col">
+
+        <!-- Initial Upload Screen -->
+        <div v-if="!isDataLoaded" class="fixed inset-0 z-50 bg-slate-800 flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full text-center relative">
+                <i class="ph ph-database text-6xl text-blue-500 mb-4"></i>
+                <h1 class="text-2xl font-bold text-slate-800 mb-2">Schema Analyzer AI Powered</h1>
+                <p class="text-slate-500 mb-8">Version 1.08.3</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="border-2 border-dashed rounded-lg p-6 transition-colors relative cursor-pointer group"
+                         :class="ddlContent ? 'border-blue-500 bg-blue-50' : 'border-slate-300 hover:bg-slate-50'">
+                        <input type="file" accept=".sql,.txt" @change="handleDDLUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <i class="ph ph-file-sql text-4xl mb-2" :class="ddlContent ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-500'"></i>
+                        <p class="font-semibold text-slate-700">1. Upload DDL File <span class="text-red-500">*</span></p>
+                        <p class="text-xs text-slate-400 mt-1" v-if="!ddlFileName">Required (e.g. DDL_sample.sql)</p>
+                        <p class="text-xs text-blue-600 font-bold mt-1" v-else><i class="ph ph-check"></i> {{ ddlFileName }}</p>
+                    </div>
+
+                    <div class="border-2 border-dashed rounded-lg p-6 transition-colors relative cursor-pointer group"
+                         :class="csvContent ? 'border-green-500 bg-green-50' : 'border-slate-300 hover:bg-slate-50'">
+                        <input type="file" accept=".csv" @change="handleCSVUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <i class="ph ph-file-csv text-4xl mb-2" :class="csvContent ? 'text-green-600' : 'text-slate-400 group-hover:text-green-500'"></i>
+                        <p class="font-semibold text-slate-700">2. Upload Table Focus</p>
+                        <p class="text-xs text-slate-400 mt-1" v-if="!csvFileName">Optional (CSV for filtering)</p>
+                        <p class="text-xs text-green-600 font-bold mt-1" v-else><i class="ph ph-check"></i> {{ csvFileName }}</p>
+                    </div>
+                </div>
+
+                <div v-if="errorMsg" class="mt-4 p-3 bg-red-100 text-red-700 text-sm rounded-lg flex items-center justify-center gap-2">
+                    <i class="ph ph-warning-circle"></i> {{ errorMsg }}
+                </div>
+
+                <button @click="processFiles" 
+                        :disabled="!ddlContent"
+                        class="mt-8 px-8 py-3 rounded-lg font-bold shadow-lg transition-all w-full md:w-auto flex items-center justify-center mx-auto"
+                        :class="ddlContent ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer' : 'bg-slate-300 text-slate-500 cursor-not-allowed'">
+                    <i class="ph ph-play-circle mr-2"></i> Start Analysis
+                </button>
+
+                <!-- Version Button -->
+                <button @click="showVersionModal = true" class="absolute bottom-4 right-4 text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
+                    <i class="ph ph-info"></i> v1.08.3
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Interface -->
+        <div v-else class="flex h-full">
+            <!-- Sidebar -->
+            <div class="w-1/3 min-w-[380px] max-w-[500px] bg-white border-r border-slate-200 flex flex-col h-full shadow-lg z-10">
+                <!-- Header -->
+                <div class="p-4 bg-slate-800 text-white flex justify-between items-center shadow-md shrink-0">
+                    <div>
+                        <h1 class="font-bold flex items-center gap-2"><i class="ph ph-graph text-blue-400"></i> Schema Explorer</h1>
+                        <p class="text-[10px] text-slate-400 mt-0.5">
+                            Matches: {{ filteredTables.length }} / {{ tables.length }} Tables
+                        </p>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <!-- Impact Button -->
+                        <button @click="openImpactModal" class="text-xs bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded transition-colors flex items-center gap-1 shadow-sm border border-orange-500" title="Check Column Impact">
+                            <i class="ph ph-lightning"></i> Impact
+                        </button>
+
+                        <!-- AI Global Button -->
+                        <button @click="openGlobalAiModal" class="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded transition-colors flex items-center gap-1 shadow-sm border border-purple-500" title="Ask AI about all tables">
+                            <i class="ph ph-chat-teardrop-text"></i> AI
+                        </button>
+
+                        <!-- ER Diagram Button -->
+                        <button @click="openERModal" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded transition-colors flex items-center gap-1 shadow-sm border border-indigo-500" title="View Relationship Diagram">
+                            <i class="ph ph-tree-structure"></i> ER
+                        </button>
+                        
+                        <!-- New Upload Button -->
+                        <button @click="reset" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded transition-colors border border-slate-600" title="Start Over">
+                            <i class="ph ph-upload-simple"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bg-slate-50 border-b border-slate-200 shrink-0">
+                    <!-- Search -->
+                    <div class="p-3 pb-2">
+                        <div class="relative">
+                            <i class="ph ph-magnifying-glass absolute left-3 top-2.5 text-slate-400"></i>
+                            <input v-model="searchQuery" type="text" placeholder="Search Table Name or Group..." class="w-full pl-9 pr-3 py-2 text-sm border rounded shadow-sm focus:ring-1 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="px-3 pb-3 space-y-3">
+                        <div class="flex items-center gap-2">
+                             <div class="flex rounded-md shadow-sm" role="group">
+                                <button @click="toggleTier('1')" class="filter-btn px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-l-md" :class="filters.tiers.has('1') ? 'bg-red-500 text-white border-red-600' : 'bg-white text-slate-600 hover:bg-slate-50'">T1</button>
+                                <button @click="toggleTier('2')" class="filter-btn px-2.5 py-1 text-xs font-bold border-t border-b border-r border-slate-300" :class="filters.tiers.has('2') ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-slate-600 hover:bg-slate-50'">T2</button>
+                                <button @click="toggleTier('3')" class="filter-btn px-2.5 py-1 text-xs font-bold border-t border-b border-r border-slate-300 rounded-r-md" :class="filters.tiers.has('3') ? 'bg-slate-500 text-white border-slate-600' : 'bg-white text-slate-600 hover:bg-slate-50'">T3</button>
+                            </div>
+                            
+                            <select v-model="sortBy" class="ml-auto text-xs border border-slate-300 rounded-md py-1 px-2 bg-white text-slate-600 outline-none focus:border-blue-400">
+                                <option value="name">Sort: Name</option>
+                                <option value="level_asc">Sort: Top-Down</option>
+                                <option value="level_desc">Sort: Bottom-Up</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="flex justify-between items-center text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                                <span>Filter by Hierarchy Level</span>
+                                <span v-if="filters.levels.size > 0" class="text-indigo-500 cursor-pointer hover:underline" @click="filters.levels.clear(); recalculateAllStats();">Clear</span>
+                            </div>
+                            <div class="flex gap-1 overflow-x-auto pb-2 custom-scrollbar">
+                                <button v-for="l in availableLevels" :key="l" 
+                                        @click="toggleLevel(l)"
+                                        class="shrink-0 px-2 py-1 text-[10px] font-bold rounded border transition-colors min-w-[32px] text-center"
+                                        :class="filters.levels.has(l) ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:bg-indigo-50 hover:text-indigo-600'">
+                                    L{{ l }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2">
+                             <button @click="filters.leafOnly = !filters.leafOnly" 
+                                    class="filter-btn flex-1 py-1 text-[10px] font-bold border rounded-md flex items-center justify-center gap-1"
+                                    :class="filters.leafOnly ? 'bg-teal-100 text-teal-700 border-teal-300 ring-1 ring-teal-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-teal-50'">
+                                <i class="ph ph-arrow-fat-lines-down"></i> Leaf Only
+                            </button>
+                             <button @click="filters.focusOnly = !filters.focusOnly" class="filter-btn flex-1 px-2 py-1 text-[10px] font-medium border rounded-md flex items-center justify-center gap-1" :class="filters.focusOnly ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'">
+                                <i class="ph ph-crosshair" :class="filters.focusOnly ? 'text-green-400' : ''"></i> Focus
+                            </button>
+                        </div>
+                        
+                        <!-- DYNAMIC FILTERS (Generated from CSV) -->
+                        <div v-if="customFlagNames.length > 0" class="flex flex-wrap gap-2">
+                            <button v-for="flag in customFlagNames" :key="flag" 
+                                    @click="toggleCustomFlag(flag)"
+                                    class="filter-btn flex-1 py-1 text-[10px] font-bold border rounded-md uppercase tracking-wider whitespace-nowrap"
+                                    :class="filters.dynamicFlags.has(flag) ? 'bg-blue-100 text-blue-700 border-blue-300 ring-1 ring-blue-300' : 'bg-white text-slate-400 border-slate-200 hover:border-blue-200 hover:text-blue-600'">
+                                {{ flag }}
+                            </button>
+                        </div>
+                        
+                        <div v-if="activeFilterCount > 0" class="flex flex-wrap gap-1 pt-1 border-t border-slate-200 border-dashed">
+                            <span class="text-[9px] text-slate-400 uppercase mr-1">Active:</span>
+                            <span v-for="t in filters.tiers" class="text-[9px] px-1.5 rounded bg-slate-200 text-slate-700 font-bold">T{{t}}</span>
+                            <span v-for="l in filters.levels" class="text-[9px] px-1.5 rounded bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold">L{{l}}</span>
+                            <span v-if="filters.leafOnly" class="text-[9px] px-1.5 rounded bg-teal-100 text-teal-700 border border-teal-200">Leaves</span>
+                            <span v-if="filters.focusOnly" class="text-[9px] px-1.5 rounded bg-slate-700 text-white">Focus List</span>
+                            <span v-for="f in filters.dynamicFlags" class="text-[9px] px-1.5 rounded bg-blue-100 text-blue-700 border border-blue-200">{{ f }}</span>
+                            <button @click="clearFilters" class="ml-auto text-[9px] text-red-500 hover:underline">Clear All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table List -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 bg-slate-50">
+                    <div v-for="table in filteredTables" :key="table.name" @click="selectTable(table)"
+                         class="p-2.5 rounded border cursor-pointer group transition-all"
+                         :class="selectedTable?.name === table.name ? 'bg-white border-blue-400 ring-2 ring-blue-100 shadow-md z-10' : 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-sm'">
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="font-semibold text-sm text-slate-700 break-all leading-tight mr-1" :class="{'text-blue-700': selectedTable?.name === table.name}">{{ table.name }}</span>
+                            <div class="flex gap-1">
+                                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 min-w-[24px] text-center" title="Hierarchy Level">L{{ table.depth }}</span>
+                                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap shadow-sm" :class="getTierClass(table.tier)">T{{ table.tier }}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between mt-2">
+                            <div class="flex gap-1 flex-wrap">
+                                <span v-if="table.isFocus" class="text-[9px] font-bold px-1 rounded bg-slate-700 text-white border border-slate-600 opacity-80" title="Focus Table">F</span>
+                                <!-- Dynamic Flags in List -->
+                                <span v-for="(val, key) in table.flags" :key="key" v-show="val" 
+                                      class="text-[9px] font-bold px-1 rounded bg-blue-50 text-blue-700 border border-blue-200" 
+                                      :class="{'ring-1 ring-blue-300': filters.dynamicFlags.has(key)}">
+                                    {{ key.substring(0, 3).toUpperCase() }}
+                                </span>
+                            </div>
+                            <div v-if="getDynamicChildCount(table.name) > 0" class="flex items-center text-[10px] bg-slate-50 rounded px-1.5 py-0.5 border border-slate-200 gap-2 shadow-sm ml-auto">
+                                <span class="flex items-center gap-1 text-slate-500"><i class="ph ph-arrow-elbow-down-right"></i> {{ getDynamicChildCount(table.name) }}</span>
+                                <span class="w-px h-3 bg-slate-300"></span>
+                                <span class="flex items-center gap-1 font-bold" :class="activeFilterCount > 0 ? 'text-green-600' : 'text-blue-600'"><i class="ph ph-tree-structure"></i> {{ getDynamicDescendantCount(table.name) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-if="filteredTables.length === 0" class="py-10 text-center text-slate-400">
+                        <i class="ph ph-funnel-x text-3xl mb-2 opacity-50"></i>
+                        <p class="text-xs">No tables match filters</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="flex-1 bg-slate-100 overflow-y-auto custom-scrollbar p-6 relative">
+                <div v-if="selectedTable" class="max-w-6xl mx-auto space-y-6 pb-20">
+                    <!-- Header -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden transition-all duration-300" :class="activeFilterCount > 0 ? 'ring-2 ring-green-100' : ''">
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="px-2 py-0.5 text-xs font-bold rounded bg-slate-100 text-slate-600 border border-slate-200">{{ selectedTable.group || 'No Group' }}</span>
+                                <span class="px-2 py-0.5 text-xs font-bold rounded" :class="getTierClass(selectedTable.tier)">Tier {{ selectedTable.tier || '?' }}</span>
+                                <span class="px-2 py-0.5 text-xs font-bold rounded bg-indigo-50 text-indigo-600 border border-indigo-100">Level {{ selectedTable.depth }}</span>
+                                <!-- Tool Buttons -->
+                                <div class="ml-auto flex gap-2">
+                                    <button @click="openDataDictModal" class="flex items-center gap-1 px-3 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-md text-xs font-bold shadow-sm transition-all" title="Data Dictionary"><i class="ph ph-book-open-text"></i> Dict</button>
+                                    <button @click="openMockModal" class="flex items-center gap-1 px-3 py-1 bg-pink-600 hover:bg-pink-500 text-white rounded-md text-xs font-bold shadow-sm transition-all" title="Generate Mock Data"><i class="ph ph-dice-five"></i> Mock</button>
+                                    <button @click="openAiModal" class="flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-md text-xs font-bold shadow-md hover:from-purple-500 hover:to-indigo-500 transition-all border border-purple-400"><i class="ph ph-sparkle-fill"></i> AI</button>
+                                    <button @click="openSqlModal" class="flex items-center gap-1 px-3 py-1 bg-slate-800 text-white rounded-md text-xs font-bold shadow-sm hover:bg-slate-700 transition-all"><i class="ph ph-code"></i> SQL</button>
+                                </div>
+                            </div>
+                            <h2 class="text-3xl font-bold text-slate-800 font-mono tracking-tight">{{ selectedTable.name }}</h2>
+                            <div class="flex gap-3 mt-4 text-sm flex-wrap">
+                                <span class="px-2 py-1 rounded text-xs font-bold border flex items-center gap-1" :class="selectedTable.isFocus ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-100 text-slate-400 border-slate-200 opacity-50'"><i class="ph ph-crosshair"></i> Focus Table</span>
+                                <!-- Dynamic Flags in Header -->
+                                <span v-for="(val, key) in selectedTable.flags" :key="key" v-show="val" 
+                                      class="px-2 py-1 rounded text-xs font-bold border bg-blue-50 text-blue-700 border-blue-200">
+                                    {{ key }}
+                                </span>
+                            </div>
+                        </div>
+                        <i class="ph ph-database absolute -right-6 -bottom-6 text-9xl text-slate-100 transition-colors duration-500" :class="activeFilterCount > 0 ? 'text-green-50' : 'text-slate-50'"></i>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        <!-- Parents Panel -->
+                        <div class="lg:col-span-4 space-y-3">
+                            <div class="flex justify-between items-end border-b border-slate-200 pb-2"><h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><i class="ph ph-arrow-fat-up text-orange-400"></i> Parents</h3></div>
+                            <div class="flex items-center gap-2 text-[10px] bg-orange-50 rounded-md p-2 border border-orange-100 mb-2">
+                                <div class="flex-1 text-center border-r border-orange-200"><span class="block text-slate-500 text-[9px] uppercase">Direct</span><span class="font-bold text-orange-600 text-sm">{{ ancestorStats.direct }}</span></div>
+                                <div class="flex-1 text-center border-r border-orange-200"><span class="block text-slate-500 text-[9px] uppercase">Ancestors</span><span class="font-bold text-orange-600 text-sm">{{ ancestorStats.total }}</span></div>
+                                <div class="flex-1 text-center"><span class="block text-slate-500 text-[9px] uppercase">Depth</span><span class="font-bold text-orange-600 text-sm">{{ selectedTable.depth }}</span></div>
+                            </div>
+                            <div v-if="filteredParents.length" class="space-y-2"><div v-for="p in filteredParents" :key="p" @click="selectByName(p)" class="p-3 bg-white border border-l-4 border-l-orange-400 rounded shadow-sm cursor-pointer hover:bg-orange-50 flex justify-between items-center group transition-all"><span class="text-sm font-mono text-slate-700">{{ p }}</span><i class="ph ph-arrow-right text-orange-300 group-hover:text-orange-500"></i></div></div>
+                            <div v-else class="p-6 bg-white border border-dashed border-slate-300 rounded-lg text-center flex flex-col items-center gap-2"><i class="ph ph-prohibit text-slate-300 text-2xl"></i><span class="text-xs text-slate-400">No Parent Tables found</span></div>
+                        </div>
+                        <!-- Children Panel -->
+                        <div class="lg:col-span-8 space-y-3">
+                            <div class="flex justify-between items-end border-b border-slate-200 pb-2"><h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><i class="ph ph-git-branch text-blue-500"></i> Children</h3><div class="flex items-center gap-3 text-[11px]"><span class="text-slate-500">Direct: <b class="text-slate-800">{{ getDynamicChildCount(selectedTable.name) }}</b></span><span class="px-2 py-0.5 rounded border shadow-sm font-bold transition-colors duration-300" :class="activeFilterCount > 0 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'">Total: {{ getDynamicDescendantCount(selectedTable.name) }}</span></div></div>
+                            <div v-if="filteredChildrenTree.length" class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 transition-all duration-300"><tree-node v-for="node in filteredChildrenTree" :key="node.name" :node="node" :depth="0" @select="selectByName"></tree-node></div>
+                            <div v-else class="p-12 bg-white border border-dashed border-slate-300 rounded-xl text-center flex flex-col items-center"><i class="ph ph-leaf text-5xl text-green-400 mb-3 opacity-50"></i><p class="text-sm font-medium text-green-600">Leaf Node</p><p class="text-xs text-slate-400 mt-1">{{ activeFilterCount > 0 ? 'No child tables match filters' : 'No tables reference this table' }}</p></div>
+                        </div>
+                    </div>
+                </div>
+                <div v-else class="flex flex-col items-center justify-center h-full text-slate-400 select-none"><div class="w-24 h-24 bg-slate-200 rounded-full flex items-center justify-center mb-4 opacity-50"><i class="ph ph-hand-tap text-4xl text-slate-500"></i></div><p class="font-medium text-slate-500">Select a table to analyze</p><p class="text-xs mt-1 opacity-70">or use the AI Chat button for global queries</p></div>
+            </div>
+        </div>
+        
+        <!-- NEW: Version Modal -->
+        <div v-if="showVersionModal" class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 modal-enter-active">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
+                <div class="p-4 bg-slate-800 text-white flex justify-between items-center">
+                    <h3 class="font-bold flex items-center gap-2"><i class="ph ph-info text-blue-300"></i> Module Versions</h3>
+                    <button @click="showVersionModal = false" class="hover:text-slate-300"><i class="ph ph-x text-xl"></i></button>
+                </div>
+                <div class="p-4 bg-slate-50 flex-1 overflow-y-auto max-h-[60vh]">
+                     <div class="space-y-2">
+                        <div v-for="(ver, name) in moduleVersions" :key="name" class="flex justify-between items-center p-2 bg-white rounded border border-slate-200">
+                            <span class="text-sm font-medium text-slate-700">{{ name }}</span>
+                            <span class="text-xs font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">{{ ver }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW: Data Dictionary Modal v1.07.3 -->
+        <div v-if="showDataDictModal" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 modal-enter-active">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[85vh] overflow-hidden">
+                <div class="p-4 bg-teal-700 text-white flex justify-between items-center">
+                    <h3 class="font-bold flex items-center gap-2"><i class="ph ph-book-open-text text-teal-300"></i> Data Dictionary: {{ selectedTable?.name }}</h3>
+                    <div class="flex items-center gap-2"><button @click="exportDataDictCSV" class="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1"><i class="ph ph-download-simple"></i> CSV</button><button @click="showDataDictModal = false" class="hover:text-teal-200"><i class="ph ph-x text-xl"></i></button></div>
+                </div>
+                <div class="p-6 overflow-y-auto bg-slate-50 flex-1 flex flex-col gap-6">
+                    <!-- Columns Table -->
+                    <div class="overflow-x-auto rounded-lg border border-slate-200">
+                        <table class="w-full text-sm text-left text-slate-600">
+                            <thead class="text-xs text-slate-700 uppercase bg-slate-100">
+                                <tr>
+                                    <th class="px-4 py-3">Column</th>
+                                    <th class="px-4 py-3">Type</th>
+                                    <th class="px-4 py-3">Attributes</th>
+                                    <th class="px-4 py-3 text-center">Not Null</th>
+                                    <th class="px-4 py-3">FK Reference</th>
+                                    <th class="px-4 py-3">Default</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="col in parsedColumns" :key="col.name" class="bg-white border-b hover:bg-slate-50">
+                                    <td class="px-4 py-2 font-mono font-medium text-slate-800">{{ col.name }}</td>
+                                    <td class="px-4 py-2 text-blue-600 font-mono text-xs">{{ col.type }}</td>
+                                    <td class="px-4 py-2 text-xs">
+                                        <span v-if="col.isPk" class="bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded border border-yellow-200 mr-1">PK</span>
+                                        <span v-if="col.isFk" class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded border border-blue-200 mr-1">FK</span>
+                                        <span v-if="col.unique" class="bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded border border-purple-200">UQ</span>
+                                    </td>
+                                    <!-- New Not Null Column -->
+                                    <td class="px-4 py-2 text-xs text-center font-bold text-red-500">
+                                        {{ col.notNull ? 'Yes' : '' }}
+                                    </td>
+                                    <!-- New FK Ref Column -->
+                                    <td class="px-4 py-2 text-xs font-mono text-slate-500">
+                                        <span v-if="col.fkTarget" class="text-blue-600 bg-blue-50 px-1 rounded">{{ col.fkTarget }}</span>
+                                    </td>
+                                    <td class="px-4 py-2 text-xs text-slate-500 font-mono">{{ col.defaultVal || '-' }}</td>
+                                </tr>
+                                <tr v-if="parsedColumns.length === 0"><td colspan="6" class="px-4 py-8 text-center text-slate-400">Parsing failed or no columns found.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- New Triggers & Functions Section (with Lazy Scan Fallback + Inline SQL) -->
+                    <div v-if="activeTriggers && activeTriggers.length > 0" class="border rounded-lg p-4 bg-slate-50 border-slate-200">
+                        <h4 class="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                            <i class="ph ph-lightning text-yellow-500"></i> Triggers & Bound Functions
+                        </h4>
+                        <ul class="space-y-2">
+                            <li v-for="trig in activeTriggers" :key="trig.name" class="flex items-start gap-2 text-xs bg-white p-2 rounded border border-slate-200 shadow-sm">
+                                <span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider text-[10px] border border-orange-200">{{ trig.event }}</span>
+                                <span class="font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">{{ trig.name }}</span>
+                                <span class="text-slate-400">executes</span>
+                                <!-- FIX: Better Display for Inline SQL -->
+                                <span class="font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded" :title="trig.func">
+                                    {{ trig.func }}<span v-if="trig.args !== null">({{ trig.args }})</span>
+                                </span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div v-else class="text-center py-4 border border-dashed rounded-lg text-slate-400 text-xs">
+                         No triggers found for this table.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW: Mock Data Modal -->
+        <div v-if="showMockModal" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 modal-enter-active">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[85vh] overflow-hidden">
+                <div class="p-4 bg-pink-700 text-white flex justify-between items-center"><h3 class="font-bold flex items-center gap-2"><i class="ph ph-dice-five text-pink-300"></i> Mock Data Generator</h3><button @click="showMockModal = false" class="hover:text-pink-200"><i class="ph ph-x text-xl"></i></button></div>
+                <div class="p-6 overflow-y-auto bg-slate-50 flex-1 flex flex-col">
+                    <div class="mb-4 text-sm text-slate-600">Generates complete INSERT statements for <strong>{{ selectedTable?.name }}</strong> (All required fields). Includes parent records.</div>
+                    <div class="relative flex-1 group"><pre class="rounded-lg overflow-y-auto border border-slate-200 bg-white h-full p-4 custom-scrollbar shadow-inner"><code class="language-sql text-sm code-font">{{ mockDataSql }}</code></pre><button @click="copyText(mockDataSql)" class="absolute top-2 right-2 bg-white/90 p-2 rounded shadow text-slate-600 hover:text-pink-600 border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"><i class="ph ph-copy"></i></button></div>
+                    <div class="mt-4 flex justify-center"><button @click="generateMockData" class="bg-pink-600 hover:bg-pink-700 text-white px-6 py-2 rounded-full font-bold shadow flex items-center gap-2"><i class="ph ph-arrows-clockwise"></i> Regenerate</button></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW: Impact Analysis Modal with Hierarchy -->
+        <div v-if="showImpactModal" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 modal-enter-active">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden">
+                <div class="p-4 bg-orange-600 text-white flex justify-between items-center"><h3 class="font-bold flex items-center gap-2"><i class="ph ph-lightning text-orange-200"></i> Column Impact Analysis</h3><button @click="showImpactModal = false" class="hover:text-orange-200"><i class="ph ph-x text-xl"></i></button></div>
+                <div class="p-6 overflow-y-auto bg-slate-50 flex-1">
+                    <div class="relative mb-2"><input v-model="impactSearchCol" @keyup.enter="analyzeImpact" type="text" placeholder="Enter column name (e.g. citizen_id)..." class="w-full pl-4 pr-12 py-3 border border-slate-300 rounded-lg shadow-sm focus:ring-2 focus:ring-orange-500 outline-none"><button @click="analyzeImpact" class="absolute right-2 top-2 bg-orange-500 text-white p-1.5 rounded hover:bg-orange-600 transition"><i class="ph ph-magnifying-glass"></i></button></div>
+                    
+                    <div class="flex gap-4 mb-4 text-sm">
+                        <!-- FIX: Added name attribute for mutual exclusion -->
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" v-model="impactSearchMode" value="exact" name="impactMode" class="text-orange-600 focus:ring-orange-500">
+                            <span class="text-slate-700">Exact Match</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" v-model="impactSearchMode" value="contains" name="impactMode" class="text-orange-600 focus:ring-orange-500">
+                            <span class="text-slate-700">Contains</span>
+                        </label>
+                    </div>
+
+                    <div v-if="impactResults && impactResults.length > 0">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">Impact Hierarchy <span class="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full text-[10px] border border-orange-200">Total: {{ totalImpactCount }} Tables</span></h4>
+                            <button @click="copyImpactList" class="text-xs bg-white border border-slate-300 text-slate-600 px-2 py-1 rounded hover:bg-slate-50 flex items-center gap-1"><i class="ph ph-copy"></i> Copy List</button>
+                        </div>
+                        <div class="bg-white rounded border border-slate-200 p-4">
+                             <impact-node v-for="node in impactResults" :key="node.name" :node="node" @select="selectByNameAndClose"></impact-node>
+                        </div>
+                    </div>
+                    <div v-else-if="impactResults && impactResults.length === 0" class="text-center text-slate-400 py-10">No tables found containing this column.</div>
+                    <div v-else class="text-center text-slate-400 py-10"><i class="ph ph-magnifying-glass text-4xl mb-2 opacity-50"></i><p class="text-sm">Search to see which tables contain a specific column.</p></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modals: DataDict, Mock, SQL, AI, ER -->
+        <div v-if="showSqlDialog" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 modal-enter-active"><div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]"><div class="p-4 border-b flex justify-between items-center bg-slate-800 text-white rounded-t-xl"><h3 class="font-bold flex items-center gap-2"><i class="ph ph-code"></i> SQL Generator</h3><button @click="showSqlDialog = false" class="hover:text-red-300"><i class="ph ph-x text-xl"></i></button></div><div class="p-6 overflow-y-auto bg-slate-50 flex-1"><div v-if="generatedSql" class="relative group"><pre class="rounded-lg overflow-hidden border border-slate-200 shadow-inner"><code class="language-sql text-sm code-font">{{ generatedSql }}</code></pre><button @click="copyText(generatedSql)" class="absolute top-2 right-2 bg-white/90 p-2 rounded shadow text-slate-600 hover:text-blue-600 border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"><i class="ph ph-copy"></i> Copy</button></div><div v-else class="text-center text-slate-400 py-10"><i class="ph ph-warning-circle text-4xl mb-2"></i><p>Cannot generate automatic JOIN path.</p></div><div class="mt-4 text-xs text-slate-500 bg-blue-50 p-3 rounded border border-blue-100"><i class="ph ph-info mr-1"></i>Logic: Attempts to join to application table.</div></div></div></div>
+        
+        <!-- Updated AI Modal with Chat -->
+        <div v-if="showAiModal" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 modal-enter-active"><div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[85vh] overflow-hidden"><div class="p-4 bg-gradient-to-r from-purple-700 to-indigo-700 text-white flex justify-between items-center"><h3 class="font-bold flex items-center gap-2 text-lg"><i class="ph ph-sparkle-fill text-yellow-300"></i> AI Assistant</h3><div class="flex items-center gap-2"><button @click="showApiKeyInput = !showApiKeyInput" class="hover:bg-white/10 p-1.5 rounded transition-colors"><i class="ph ph-gear"></i></button><button @click="showAiModal = false" class="hover:text-red-200 transition-colors"><i class="ph ph-x text-xl"></i></button></div></div><div v-if="showApiKeyInput || !hasApiKey" class="bg-purple-50 p-4 border-b border-purple-100 flex gap-2 items-center text-sm"><input v-model="userApiKey" type="password" placeholder="Enter Gemini API Key..." class="flex-1 border rounded px-2 py-1"><button @click="saveApiKey" class="bg-purple-600 text-white px-3 py-1 rounded font-bold hover:bg-purple-700">Save</button></div>
+        <!-- Tabs -->
+        <div class="flex border-b border-slate-200 bg-slate-50">
+            <!-- FIX: Hide Global Chat if Table is selected (opened via Table button) -->
+            <button v-if="aiMode === 'table'" @click="activeAiTab = 'insight'" class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors flex items-center justify-center gap-2 tab-btn" :class="activeAiTab === 'insight' ? 'active' : 'border-transparent text-slate-500'">Table Insight</button>
+            <button v-if="aiMode === 'global'" @click="activeAiTab = 'chat'" class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors flex items-center justify-center gap-2 tab-btn" :class="activeAiTab === 'chat' ? 'active' : 'border-transparent text-slate-500'"><i class="ph ph-chat-circle-dots"></i> Global Chat</button>
+            <button @click="activeAiTab = 'query'" class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors flex items-center justify-center gap-2 tab-btn" :class="activeAiTab === 'query' ? 'active' : 'border-transparent text-slate-500'"><i class="ph ph-code"></i> Text-to-SQL</button>
+        </div>
+        
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto bg-white p-6 relative custom-scrollbar flex flex-col">
+            
+            <!-- Tab: Insight -->
+            <div v-if="activeAiTab === 'insight' && selectedTable">
+                <div v-if="!aiResponse" class="text-center py-10"><button @click="generateInsight" :disabled="isLoading" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-full font-bold shadow-lg flex items-center gap-2 mx-auto"><span v-if="isLoading">Loading...</span><span v-else>Analyze {{ selectedTable.name }}</span></button></div>
+                <div v-else><div class="markdown-body" v-html="renderMarkdown(aiResponse)"></div></div>
+            </div>
+
+            <!-- Tab: Global Chat (New) -->
+            <div v-if="activeAiTab === 'chat'" class="flex flex-col h-full">
+                <div class="flex-1 overflow-y-auto space-y-3 mb-4 pr-2 custom-scrollbar border rounded-lg p-3 bg-slate-50" ref="chatContainer">
+                    <div v-if="chatMessages.length === 0" class="text-center text-slate-400 py-8 text-sm">
+                        <i class="ph ph-robot text-3xl mb-2"></i>
+                        <p>Ask me anything about your schema structure.</p>
+                        <p class="text-xs opacity-70 mt-1">e.g., "Where is customer address stored?", "Explain the relationship between Order and Product"</p>
+                        <p class="text-[10px] text-purple-400 mt-2 bg-purple-50 inline-block px-2 py-1 rounded border border-purple-100">Note: I will prioritize your DDL but can also answer general DB questions.</p>
+                    </div>
+                    <div v-for="(msg, idx) in chatMessages" :key="idx" class="flex flex-col" :class="msg.role === 'user' ? 'items-end' : 'items-start'">
+                        <div class="max-w-[85%] rounded-lg p-3 text-sm shadow-sm" 
+                             :class="msg.role === 'user' ? 'bg-purple-600 text-white' : 'bg-white border border-slate-200 text-slate-700'">
+                             <!-- FIX: Use wrapper function for markdown parsing -->
+                             <div v-if="msg.role === 'ai'" class="markdown-body" v-html="renderMarkdown(msg.text)"></div>
+                             <span v-else>{{ msg.text }}</span>
+                        </div>
+                    </div>
+                    <div v-if="isLoading" class="flex items-start"><div class="bg-white border border-slate-200 rounded-lg p-3 text-xs text-slate-400 animate-pulse">Thinking...</div></div>
+                </div>
+                <div class="flex gap-2">
+                    <input v-model="userChatInput" @keyup.enter="sendChatMessage" type="text" placeholder="Type your question..." class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none">
+                    <button @click="sendChatMessage" :disabled="isLoading || !userChatInput" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg"><i class="ph ph-paper-plane-right"></i></button>
+                </div>
+            </div>
+
+            <!-- Tab: Text-to-SQL (Updated) -->
+            <div v-if="activeAiTab === 'query'">
+                <div class="flex flex-col h-full">
+                    <div class="flex items-center gap-4 mb-3">
+                         <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" v-model="dbDialect" value="postgres" class="text-purple-600 focus:ring-purple-500">
+                            <span class="text-sm text-slate-700 font-medium">PostgreSQL</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" v-model="dbDialect" value="databricks" class="text-purple-600 focus:ring-purple-500">
+                            <span class="text-sm text-slate-700 font-medium">Azure Databricks</span>
+                        </label>
+                    </div>
+                    <div class="mb-4 relative">
+                        <textarea v-model="userQueryPrompt" class="w-full border border-slate-300 rounded-lg p-3 text-sm h-24 resize-none focus:ring-2 focus:ring-purple-200 outline-none" placeholder="Describe the query you need (e.g. Find top 10 customers by loan amount)..."></textarea>
+                        <button @click="generateSqlFromText" :disabled="isLoading || !userQueryPrompt" 
+                                class="absolute bottom-2 right-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-md text-xs font-bold shadow transition-colors flex items-center gap-2 disabled:bg-slate-400 disabled:cursor-not-allowed">
+                            <i v-if="isLoading" class="ph ph-spinner animate-spin"></i>
+                            {{ isLoading ? 'Generating SQL...' : 'Generate SQL' }}
+                        </button>
+                    </div>
+                    <div v-if="aiSqlResponse" class="flex-1 overflow-hidden flex flex-col">
+                        <div class="relative flex-1 group">
+                            <pre class="rounded-lg overflow-y-auto border border-slate-200 bg-slate-50 h-full p-4 custom-scrollbar shadow-inner"><code class="language-sql text-sm code-font" v-html="aiSqlResponse"></code></pre>
+                            <button @click="copyAiSql" class="absolute top-2 right-2 bg-white/90 p-2 rounded shadow hover:text-purple-600"><i class="ph ph-copy"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div></div></div>
+        <div v-if="showERDialog" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 modal-enter-active"><div class="bg-white rounded-xl shadow-2xl w-full h-full max-w-[95vw] max-h-[90vh] flex flex-col relative overflow-hidden"><div class="p-3 border-b flex justify-between items-center bg-slate-800 text-white shrink-0"><div class="flex items-center gap-3"><h3 class="font-bold flex items-center gap-2"><i class="ph ph-tree-structure text-indigo-400"></i> ER Diagram</h3><span class="text-xs bg-slate-700 px-2 py-0.5 rounded text-slate-300">Filtered: {{ filteredTables.length }} tables</span></div><div class="flex items-center gap-4"><div class="text-[10px] text-slate-400 flex gap-2"><span class="flex items-center gap-1"><i class="ph ph-mouse-left-click"></i> Pan</span><span class="flex items-center gap-1"><i class="ph ph-mouse-wheel"></i> Zoom</span></div><button @click="showERDialog = false" class="hover:text-red-300 transition-colors"><i class="ph ph-x text-2xl"></i></button></div></div><div class="flex-1 relative cy-wrapper"><canvas id="bgCanvas"></canvas><div id="cy"></div><div class="absolute bottom-4 left-4 bg-white/90 backdrop-blur p-3 rounded-lg shadow border border-slate-200 text-xs z-10 pointer-events-none"><div class="font-bold mb-1 text-slate-700">Level Zones</div><div class="flex items-center gap-2 mb-1"><span class="w-3 h-3 rounded-full bg-red-100 border border-red-200"></span> L0 (Root)</div><div class="flex items-center gap-2 mb-1"><span class="w-3 h-3 rounded-full bg-yellow-100 border border-yellow-200"></span> L1</div><div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-100 border border-green-200"></span> L2</div></div></div></div></div>
+
+        <div class="watermark">generate by "Wittawas P"</div>
+
+    </div>
+
+    <!-- Impact Node Template (Recursive) -->
+    <script type="text/x-template" id="impact-node-template">
+        <div class="pl-4 border-l-2 border-slate-100 relative">
+            <div class="flex items-center gap-2 py-1 group cursor-pointer hover:bg-orange-50 rounded px-2 -ml-2" @click.stop="$emit('select', node.name)">
+                <div class="w-2 h-2 rounded-full bg-orange-400"></div>
+                <span class="font-mono text-sm text-slate-700 group-hover:text-orange-700 font-medium">{{ node.name }}</span>
+                <span v-if="node.children.length" class="text-xs text-slate-400">({{ node.children.length }} refs)</span>
+            </div>
+            <div v-if="node.children && node.children.length">
+                <impact-node v-for="child in node.children" :key="child.name" :node="child" @select="$emit('select', $event)"></impact-node>
+            </div>
+        </div>
+    </script>
+
+    <!-- Tree Node Template (Main) -->
+    <script type="text/x-template" id="tree-node-template">
+        <div class="relative tree-item">
+            <div class="tree-line-v"></div>
+            <div v-if="depth > 0" class="tree-line-h"></div>
+            <div class="flex items-center gap-2 py-1.5 group">
+                <div @click="toggle" class="relative z-10 w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors" :class="hasChildren ? 'bg-white text-blue-600 border border-blue-200 hover:bg-blue-50' : 'bg-slate-50 text-slate-300 border border-slate-200'">
+                    <i v-if="hasChildren" class="ph text-[10px]" :class="isOpen ? 'ph-minus' : 'ph-plus'"></i>
+                    <i v-else class="ph ph-leaf text-green-500 text-[10px]"></i>
+                </div>
+                <div @click="$emit('select', node.name)" class="flex-1 flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-slate-50 -ml-1 transition-colors">
+                    <i class="ph ph-table text-slate-400 text-xs"></i>
+                    <span class="font-mono text-sm text-slate-700" :class="{'font-semibold text-blue-700': hasChildren}">{{ node.name }}</span>
+                    <!-- Dynamic Badges in Tree -->
+                     <span v-for="(val, key) in node.flags" :key="key" v-show="val" 
+                          class="text-[7px] font-bold px-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200 ml-1">
+                        {{ key.substring(0,1).toUpperCase() }}
+                    </span>
+                    <span v-if="hasChildren" class="text-[9px] bg-slate-100 px-1.5 rounded text-slate-500 border border-slate-200 ml-1">{{ node.children.length }}</span>
+                </div>
+            </div>
+            <div v-if="hasChildren && isOpen" class="pl-6 relative"><tree-node v-for="child in node.children" :key="child.name" :node="child" :depth="depth + 1" @select="$emit('select', $event)"></tree-node></div>
+        </div>
+    </script>
+
+    <script>
+        const { createApp, ref, computed, reactive, watch, nextTick } = Vue;
+        const TreeNode = { name: 'tree-node', template: '#tree-node-template', props: ['node', 'depth'], emits: ['select'], setup(props) { const isOpen = ref(true); const hasChildren = computed(() => props.node.children && props.node.children.length > 0); const toggle = () => { if(hasChildren.value) isOpen.value = !isOpen.value; }; return { isOpen, hasChildren, toggle }; } };
+        
+        const ImpactNode = {
+            name: 'impact-node',
+            template: '#impact-node-template',
+            props: ['node'],
+            emits: ['select']
+        };
+
+        createApp({
+            components: { TreeNode, ImpactNode },
+            setup() {
+                const isDataLoaded = ref(false), ddlContent = ref(null), csvContent = ref(null), ddlFileName = ref(''), csvFileName = ref(''), errorMsg = ref('');
+                const tables = ref([]), relationships = ref({}), parentMap = ref({}), sqlMetadata = ref({});
+                const searchQuery = ref(''), selectedTable = ref(null);
+                const showSqlDialog = ref(false), generatedSql = ref(''), showERDialog = ref(false);
+                const showDataDictModal = ref(false), showMockModal = ref(false), showImpactModal = ref(false);
+                
+                // Impact Analysis
+                const impactSearchCol = ref('');
+                const impactResults = ref(null);
+                const mockDataSql = ref('');
+                const impactSearchMode = ref('exact'); // Default to Exact Match
+                const totalImpactCount = ref(0);
+
+                // AI Variables
+                const showAiModal = ref(false), activeAiTab = ref('insight'), userApiKey = ref(''), showApiKeyInput = ref(false), isLoading = ref(false), aiResponse = ref(''), userQueryPrompt = ref(''), aiSqlResponse = ref(''), copySuccess = ref(false), dbDialect = ref('postgres');
+                const userChatInput = ref(''); 
+                const chatMessages = ref([]);
+                const aiMode = ref('table'); // 'table' or 'global'
+
+                const aiContextTables = ref('');
+                const dynamicDescendantCache = ref({}), sortBy = ref('name'), maxDepth = ref(0); let cy = null;
+                
+                // New Dynamic Filters Logic
+                const filters = reactive({ focusOnly: false, tiers: new Set(), levels: new Set(), leafOnly: false, dynamicFlags: new Set() });
+                const customFlagNames = ref([]);
+
+                const hasApiKey = computed(() => !!userApiKey.value);
+                const saveApiKey = () => { localStorage.setItem('ngl_gemini_key', userApiKey.value); showApiKeyInput.value = false; };
+                if(localStorage.getItem('ngl_gemini_key')) userApiKey.value = localStorage.getItem('ngl_gemini_key');
+
+                const handleDDLUpload = (e) => { const f = e.target.files[0]; if(!f) return; ddlFileName.value = f.name; const r = new FileReader(); r.onload = (ev) => ddlContent.value = ev.target.result; r.readAsText(f); };
+                const handleCSVUpload = (e) => { const f = e.target.files[0]; if(!f) return; csvFileName.value = f.name; const r = new FileReader(); r.onload = (ev) => csvContent.value = ev.target.result; r.readAsText(f); };
+
+                const copyText = (text) => { if (!text) { console.warn("Nothing to copy"); return; } if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(() => showCopySuccess()).catch(err => fallbackCopy(text)); } else { fallbackCopy(text); } };
+                const fallbackCopy = (text) => { const textArea = document.createElement("textarea"); textArea.value = text; textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.style.top = "0"; textArea.style.zIndex = "99999"; document.body.appendChild(textArea); textArea.focus(); textArea.select(); try { document.execCommand('copy'); showCopySuccess(); } catch (err) { alert("Copy failed."); } document.body.removeChild(textArea); };
+                const showCopySuccess = () => { copySuccess.value = true; setTimeout(() => copySuccess.value = false, 2000); };
+                const copySql = () => copyText(generatedSql.value);
+                const copyAiSql = () => { const temp = document.createElement('div'); temp.innerHTML = aiSqlResponse.value; copyText(temp.innerText); };
+
+                // --- Helper for Markdown Parsing (FIX 1) ---
+                const renderMarkdown = (text) => {
+                    if (!text) return '';
+                    if (typeof marked !== 'undefined' && marked.parse) {
+                        return marked.parse(text);
+                    }
+                    return text; // Fallback if marked fails
+                };
+
+                // --- 1. Enhanced DDL Parser ---
+                const extractColumnDetails = (rawDDL) => {
+                    const columns = [];
+                    if (!rawDDL) return columns;
+                    // Remove backticks inside the rawDDL snippet for cleaner parsing
+                    const cleanRawDDL = rawDDL.replace(/`/g, '');
+                    const bodyMatch = cleanRawDDL.match(new RegExp('\\(([\\s\\S]*)\\)'));
+                    if (!bodyMatch) return columns;
+                    const lines = bodyMatch[1].split(new RegExp('\\r?\\n'));
+                    lines.forEach(line => {
+                        let l = line.trim().replace(new RegExp(',$'), '');
+                        if (!l || l.startsWith('--') || l.startsWith('CONSTRAINT') || l.startsWith('KEY') || l.startsWith('PRIMARY KEY') || l.startsWith('INDEX') || l.startsWith('UNIQUE')) return;
+                        
+                        const colMatch = l.match(/^"?([a-zA-Z0-9_]+)"?\s+([a-z0-9_]+(?:\s*\([^)]+\))?|[\w\[\]]+)(.*)$/i);
+                        
+                        if (colMatch) {
+                            const name = colMatch[1];
+                            const type = colMatch[2];
+                            const rest = colMatch[3].toUpperCase();
+                            columns.push({ name: name, type: type, notNull: rest.includes('NOT NULL'), defaultVal: rest.includes('DEFAULT') ? rest.split('DEFAULT')[1].split(/\s+/)[1].replace(new RegExp("'", 'g'), '').replace(new RegExp(',$'), '') : null, unique: rest.includes('UNIQUE'), isPk: false, isFk: false });
+                        }
+                    });
+                    return columns;
+                };
+                
+                const parsedColumns = computed(() => {
+                    if (!selectedTable.value) return [];
+                    const tName = selectedTable.value.name;
+                    const meta = sqlMetadata.value[tName];
+                    const rawDDL = meta?.rawDDL;
+                    let cols = extractColumnDetails(rawDDL);
+                    const pkMatch = rawDDL ? rawDDL.match(new RegExp('PRIMARY KEY\\s*\\(([^)]+)\\)', 'i')) : null;
+                    let pkCols = [];
+                    if (pkMatch) pkCols = pkMatch[1].split(',').map(s => s.trim().replace(new RegExp('"', 'g'), ''));
+                    
+                    cols.forEach(c => { 
+                        if (pkCols.includes(c.name)) c.isPk = true; 
+                        
+                        // Check FK relationship
+                        const parentRef = meta.parents.find(p => p.fk === c.name);
+                        if (parentRef) {
+                            c.isFk = true;
+                            c.fkTarget = `${parentRef.name}.${parentRef.ref || 'id'}`;
+                        }
+                    });
+                    return cols;
+                });
+                
+                const activeTriggers = computed(() => {
+                    if (!selectedTable.value) return [];
+                    const tName = selectedTable.value.name;
+                    const globalTriggers = sqlMetadata.value[tName]?.triggers || [];
+                    if (globalTriggers.length > 0) return globalTriggers;
+
+                    if (ddlContent.value) {
+                         const triggers = [];
+                         // Same robust regex as processFiles
+                         const triggerRegex = /CREATE\s+TRIGGER\s+([a-z0-9_]+)\s+([\s\S]+?)\s+ON\s+(?:[a-z0-9_]+\.)?([a-z0-9_]+)[\s\S]*?EXECUTE\s+(?:FUNCTION|PROCEDURE)\s+(?:[a-z0-9_]+\.)?([a-z0-9_]+)\(([\s\S]*?)\)/gi;
+                         let tm;
+                         while ((tm = triggerRegex.exec(ddlContent.value)) !== null) {
+                            const tTable = tm[3]; 
+                            if (tTable.toLowerCase() === tName.toLowerCase()) {
+                                // Extract body logic (Fix v1.08.3)
+                                const body = tm[4].trim(); 
+                                const execMatch = body.match(/EXECUTE\s+(?:FUNCTION|PROCEDURE)\s+(?:[a-z0-9_]+\.)?([a-z0-9_]+)\(([\s\S]*?)\)/i);
+                                
+                                let displayFunc, displayArgs;
+                                if (execMatch) {
+                                    displayFunc = execMatch[1];
+                                    displayArgs = execMatch[2] ? execMatch[2].trim() : '';
+                                } else {
+                                    const flatBody = body.replace(/\s+/g, ' ');
+                                    if (flatBody.length > 80) {
+                                         displayFunc = flatBody.substring(0, 77) + '...';
+                                    } else {
+                                         displayFunc = flatBody;
+                                    }
+                                    displayArgs = null; 
+                                }
+
+                                triggers.push({
+                                    name: tm[1],
+                                    event: tm[2].replace(/\s+/g, ' ').trim().toUpperCase(),
+                                    func: displayFunc,
+                                    args: displayArgs
+                                });
+                            }
+                         }
+                         return triggers;
+                    }
+                    return [];
+                });
+
+                const openDataDictModal = () => showDataDictModal.value = true;
+                const exportDataDictCSV = () => { 
+                    const cols = parsedColumns.value; 
+                    let csvContent = "data:text/csv;charset=utf-8,Column,Type,Attributes,NotNull,FK_Reference,Default\n"; 
+                    cols.forEach(c => { 
+                        const attrs = [c.isPk?'PK':'', c.isFk?'FK':'', c.unique?'UQ':''].filter(x=>x).join(' '); 
+                        const notNullVal = c.notNull ? 'Yes' : '';
+                        const fkRefVal = c.fkTarget || '';
+                        csvContent += `${c.name},"${c.type}",${attrs},${notNullVal},${fkRefVal},${c.defaultVal||''}\n`; 
+                    }); 
+                    const encodedUri = encodeURI(csvContent); 
+                    const link = document.createElement("a"); 
+                    link.setAttribute("href", encodedUri); 
+                    link.setAttribute("download", `${selectedTable.value.name}_datadict.csv`); 
+                    document.body.appendChild(link); 
+                    link.click(); 
+                    document.body.removeChild(link); 
+                };
+
+                const openMockModal = () => { if (!selectedTable.value) return; generateMockData(); showMockModal.value = true; };
+                const generateMockData = () => { if (!selectedTable.value) return; mockDataSql.value = generateMockSQLRecursive(selectedTable.value.name); };
+                const generateMockSQLRecursive = (tableName, visited = new Set()) => { if (visited.has(tableName)) return `-- [Recursion detected: ${tableName}]`; visited.add(tableName); let sql = ''; const meta = sqlMetadata.value[tableName]; const parents = meta?.parents || []; parents.forEach(p => { sql += generateMockSQLRecursive(p.name, new Set(visited)) + '\n'; }); const cols = extractColumnDetails(meta?.rawDDL); const requiredCols = cols.filter(c => c.isPk || c.notNull || c.isFk); if (!requiredCols.length) return sql + `-- No columns parsed for ${tableName}\n`; const colNames = requiredCols.map(c => c.name).join(', '); const values = requiredCols.map(c => generateRandomValue(c)).join(', '); sql += `INSERT INTO ngl.${tableName} (${colNames}) VALUES (${values});\n`; return sql; };
+                const generateRandomValue = (col) => { const t = col.type.toLowerCase(); if (t.includes('uuid')) return `'${faker.random.uuid()}'`; if (t.includes('int') || t.includes('serial')) return faker.random.number({min: 1, max: 1000}); if (t.includes('numeric') || t.includes('decimal')) return faker.finance.amount(); if (t.includes('char') || t.includes('text')) return `'${faker.lorem.word()}'`; if (t.includes('date')) return `'${faker.date.past().toISOString().split('T')[0]}'`; if (t.includes('time')) return `'${faker.date.recent().toISOString()}'`; if (t.includes('bool')) return faker.random.boolean(); return "'mock'"; };
+
+                const openImpactModal = () => { showImpactModal.value = true; impactSearchCol.value = ''; impactResults.value = null; totalImpactCount.value = 0; };
+                const analyzeImpact = () => {
+                    if (!impactSearchCol.value) return;
+                    const query = impactSearchCol.value.toLowerCase();
+                    let regex;
+                    
+                    if (impactSearchMode.value === 'exact') {
+                        regex = new RegExp("\\b" + query + "\\b", "i");
+                    } else {
+                        regex = new RegExp(query, "i");
+                    }
+                    
+                    const matches = new Set();
+                    tables.value.forEach(t => {
+                        const ddl = sqlMetadata.value[t.name]?.rawDDL || '';
+                        if (regex.test(ddl)) {
+                            matches.add(t.name);
+                        }
+                    });
+                    
+                    totalImpactCount.value = matches.size;
+
+                    const roots = [];
+                    const matchArray = Array.from(matches);
+                    
+                    const hasParentInSet = (tableName) => {
+                        const parents = parentMap.value[tableName] || [];
+                        return parents.some(p => matches.has(p));
+                    };
+
+                    matchArray.forEach(tName => {
+                        if (!hasParentInSet(tName)) {
+                            roots.push(tName);
+                        }
+                    });
+
+                    const buildNode = (tName, visited = new Set()) => {
+                        if (visited.has(tName)) {
+                            return { name: tName + ' ⚠️ (Cycle)', children: [] };
+                        }
+                        visited.add(tName);
+                        
+                        const allChildren = relationships.value[tName] || [];
+                        const validChildren = allChildren.filter(c => matches.has(c));
+                        
+                        return {
+                            name: tName,
+                            children: validChildren.map(child => buildNode(child, new Set(visited))),
+                            flags: tables.value.find(t => t.name === tName)?.flags // Pass flags down for tree badging
+                        };
+                    };
+
+                    impactResults.value = roots.map(r => buildNode(r));
+                };
+
+                const copyImpactList = () => {
+                    if(!impactResults.value) return;
+                    const list = [];
+                    const traverse = (nodes) => {
+                        nodes.forEach(n => {
+                            list.push(n.name);
+                            if(n.children) traverse(n.children);
+                        });
+                    };
+                    traverse(impactResults.value);
+                    copyText([...new Set(list)].join('\n'));
+                };
+                const selectByNameAndClose = (name) => {
+                    const found = tables.value.find(t => t.name === name);
+                    if(found) selectedTable.value = found;
+                    showImpactModal.value = false;
+                };
+
+                const openAiModal = () => { 
+                    if(!selectedTable.value) return; 
+                    aiMode.value = 'table'; 
+                    activeAiTab.value = 'insight'; 
+                    showAiModal.value = true; 
+                    if(!userApiKey.value) showApiKeyInput.value = true; 
+                };
+                const openGlobalAiModal = () => { 
+                    selectedTable.value = null; 
+                    aiMode.value = 'global'; 
+                    activeAiTab.value = 'chat'; 
+                    showAiModal.value = true; 
+                    if(!userApiKey.value) showApiKeyInput.value = true; 
+                };
+                
+                const callGemini = async (prompt) => { if (!userApiKey.value) { alert("Enter API Key"); return null; } isLoading.value = true; try { const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${userApiKey.value}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }); const result = await response.json(); return result?.candidates?.[0]?.content?.parts?.[0]?.text || "No response."; } catch (e) { return `Error: ${e.message}`; } finally { isLoading.value = false; } };
+                const generateInsight = async () => { const prompt = `Act as Database Architect. Analyze table '${selectedTable.value.name}':\n\`\`\`sql\n${sqlMetadata.value[selectedTable.value.name]?.rawDDL}\n\`\`\`\nProvide: Summary, Risks, Business Value. Markdown.`; aiResponse.value = await callGemini(prompt); };
+                
+                const generateSqlFromText = async () => {
+                    if (!userQueryPrompt.value) return;
+                    let prompt = "";
+                    const targetDB = dbDialect.value === 'postgres' ? 'PostgreSQL' : 'Azure Databricks (Spark SQL)';
+                    const dbSpecificRules = dbDialect.value === 'postgres' ? "5. Use 'ngl.' prefix for all tables." : "5. Use 'ngl.' prefix. Use Spark SQL syntax.";
+                    const allTableNames = tables.value.map(t => t.name).join(", ");
+                    if (selectedTable.value) {
+                         const tableName = selectedTable.value.name;
+                         const tableDDL = sqlMetadata.value[tableName]?.rawDDL || "";
+                         prompt = `CRITICAL: You are a ${targetDB} Expert. Use ONLY the provided schema. Do not hallucinate columns.\n${dbSpecificRules}\n\nSchema for '${tableName}':\n\`\`\`sql\n${tableDDL}\n\`\`\`\n\nQuestion: "${userQueryPrompt.value}"\nAnswer (SQL Only):`;
+                    } else {
+                         const queryKeywords = userQueryPrompt.value.toLowerCase().split(' ').filter(w => w.length > 3);
+                         const scored = tables.value.map(t => {
+                             let score = 0;
+                             if (queryKeywords.some(k => t.name.includes(k))) score += 20;
+                             const ddl = sqlMetadata.value[t.name]?.rawDDL || "";
+                             if (queryKeywords.some(k => ddl.toLowerCase().includes(k))) score += 5;
+                             if (['application','contract','party','collateral'].includes(t.name)) score += 2;
+                             return { name: t.name, ddl, score };
+                         }).sort((a,b) => b.score - a.score);
+                         const topTables = scored.slice(0, 15);
+                         const relevantDDLs = topTables.map(t => t.ddl).join("\n\n");
+                         aiContextTables.value = topTables.map(t => t.name).join(", ");
+                         prompt = `CRITICAL INSTRUCTIONS:\n1. You are a ${targetDB} Expert.\n2. USE ONLY tables from: [${allTableNames}].\n3. USE ONLY columns from provided schema.\n${dbSpecificRules}\n\nRELEVANT SCHEMAS:\n\`\`\`sql\n${relevantDDLs}\n\`\`\`\n\nQuestion: "${userQueryPrompt.value}"\nAnswer (SQL Code Block Only):`;
+                    }
+                    const text = await callGemini(prompt);
+                    const sqlMatch = text.match(new RegExp('```sql([\\s\\S]*?)```')) || text.match(new RegExp('```([\\s\\S]*?)```')); 
+                    aiSqlResponse.value = hljs.highlight(sqlMatch ? sqlMatch[1].trim() : text, {language: 'sql'}).value; 
+                };
+                
+                const openSqlModal = () => { if(!selectedTable.value) return; generateQuery(); showSqlDialog.value = true; nextTick(() => hljs.highlightAll()); };
+                const generateQuery = () => {
+                    const startTable = selectedTable.value.name; generatedSql.value = '';
+                    if (startTable === 'application') { generatedSql.value = `SELECT * \nFROM ngl.application \nWHERE id = '<YOUR_APPLICATION_ID>';`; return; }
+                    const meta = sqlMetadata.value[startTable];
+                    if (meta && meta.hasAppIdCol) { generatedSql.value = `SELECT * \nFROM ngl.${startTable} \nWHERE application_id = '<YOUR_APPLICATION_ID>';`; return; }
+                    let foundPath = null; const queue = [{ table: startTable, path: [] }]; const visited = new Set();
+                    while (queue.length > 0) {
+                        const { table, path } = queue.shift(); if (visited.has(table)) continue; visited.add(table);
+                        const m = sqlMetadata.value[table]; if (!m) continue;
+                        if (m.hasAppIdCol) { foundPath = { table, path, type: 'col' }; break; }
+                        if (table === 'application') { foundPath = { table, path, type: 'table' }; break; }
+                        if (m.parents) { for (const parent of m.parents) { if (!visited.has(parent.name)) queue.push({ table: parent.name, path: [...path, { from: table, to: parent.name, fk: parent.fk, ref: parent.ref }] }); } }
+                    }
+                    if (!foundPath) { generatedSql.value = `/* No direct link to Application ID found. */\nSELECT * \nFROM ngl.${startTable} \nLIMIT 10;`; return; }
+                    let sql = `SELECT t0.* \nFROM ngl.${startTable} t0`;
+                    foundPath.path.forEach((edge, index) => { const aliasTo = `t${index+1}`; const refCol = edge.ref || 'id'; sql += `\nJOIN ngl.${edge.to} ${aliasTo} ON t${index}.${edge.fk} = ${aliasTo}.${refCol}`; });
+                    const lastAlias = `t${foundPath.path.length}`;
+                    if (foundPath.type === 'col') { sql += `\nWHERE ${lastAlias}.application_id = '<YOUR_APPLICATION_ID>';`; } else { sql += `\nWHERE ${lastAlias}.id = '<YOUR_APPLICATION_ID>';`; }
+                    generatedSql.value = sql;
+                };
+
+                const useAppInfo = () => {
+                    const showVersionModal = ref(false);
+                    const moduleVersions = reactive({
+                        'App Core': 'v1.08.3',
+                        'Upload': 'v1.3 (Inline FKs + Clean DDL + Inline SQL)',
+                        'AI Global': 'v2.2',
+                        'AI Text-to-SQL': 'v1.2',
+                        'Child tree-view (Hierarchy)': 'v1.0',
+                        'Impact Analyst': 'v1.1',
+                        'Data dict': 'v1.5 (Inline SQL Display)',
+                        'Mock data': 'v1.0',
+                        'SQL for application_id': 'v1.0',
+                        'Filter': 'v1.1 (Dynamic Buttons)',
+                        'Table list view': 'v1.2 (Dynamic Labels)',
+                        'ER Diagram': 'v1.0'
+                    });
+                    return { showVersionModal, moduleVersions };
+                };
+
+                const getCompactSchema = () => {
+                    return tables.value.map(t => {
+                        const meta = sqlMetadata.value[t.name];
+                        const cols = extractColumnDetails(meta?.rawDDL);
+                        const colStr = cols.map(c => {
+                            let str = `${c.name}(${c.type})`;
+                            if (c.defaultVal) str += `[Def:${c.defaultVal}]`;
+                            return str;
+                        }).join(', ');
+                        const parentStr = meta.parents.map(p => `${p.fk}->${p.name}`).join(', ');
+                        return `Table: ${t.name}\nCols: ${colStr}\nRefs: ${parentStr || 'None'}`;
+                    }).join('\n\n');
+                };
+
+                const sendChatMessage = async () => {
+                    if(!userChatInput.value) return;
+                    const userMsg = userChatInput.value;
+                    chatMessages.value.push({ role: 'user', text: userMsg });
+                    userChatInput.value = '';
+                    
+                    const schemaContext = getCompactSchema();
+                    
+                    const prompt = `You are a Database Documentation Assistant.
+                    
+                    INSTRUCTIONS:
+                    1. You have the FULL database schema below (Compressed Format).
+                    2. Use this GLOBAL knowledge to answer questions.
+                    3. Pay attention to 'Def:...' indicating default values (e.g. uuid_generate_v1).
+                    4. Answer directly without starting with "As a ...".
+                    5. Respond ONLY in Thai or English.
+                    
+                    GLOBAL SCHEMA CONTEXT:
+                    ${schemaContext}
+                    
+                    User Question: "${userMsg}"
+                    
+                    Answer (Professional, Markdown, Thai/English ONLY):`;
+
+                    const response = await callGemini(prompt);
+                    chatMessages.value.push({ role: 'ai', text: response || "Sorry, I couldn't process that." });
+                };
+
+                const openERModal = () => { showERDialog.value = true; nextTick(() => { const nodes = filteredTables.value.map(t => ({ data: { id: t.name, label: t.name, depth: t.depth } })); const edges = []; filteredTables.value.forEach(t => { const m = sqlMetadata.value[t.name]; if (m && m.parents) m.parents.forEach(p => { if (nodes.some(n => n.data.id === p.name)) edges.push({ data: { source: t.name, target: p.name, label: p.fk } }); }); }); cy = cytoscape({ container: document.getElementById('cy'), elements: [...nodes, ...edges], style: [{ selector: 'node', style: { 'shape': 'round-rectangle', 'background-color': '#fff', 'border-color': '#64748b', 'label': 'data(label)', 'width': 'label', 'height': 'label', 'padding': '10px' } }, { selector: 'edge', style: { 'width': 1.5, 'line-color': '#94a3b8', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' } }], layout: { name: 'concentric', concentric: function(n){ return 100 - n.data('depth'); }, minNodeSpacing: 80, avoidOverlap: true } }); cy.on('render', drawBackground); }); };
+                const drawBackground = () => { if (!cy) return; const canvas = document.getElementById('bgCanvas'); if (!canvas) return; const ctx = canvas.getContext('2d'); canvas.width = canvas.parentElement.offsetWidth; canvas.height = canvas.parentElement.offsetHeight; const pan = cy.pan(); const zoom = cy.zoom(); ctx.translate(pan.x, pan.y); ctx.scale(zoom, zoom); let centerX = 0, centerY = 0, countL0 = 0; cy.nodes().forEach(n => { if(n.data('depth') === 0) { centerX += n.position().x; centerY += n.position().y; countL0++; } }); if (countL0 > 0) { centerX /= countL0; centerY /= countL0; } else { const bb = cy.elements().boundingBox(); centerX = (bb.x1 + bb.x2)/2; centerY = (bb.y1 + bb.y2)/2; } const maxDistPerLevel = {}; cy.nodes().forEach(n => { const d = n.data('depth'); const dist = Math.sqrt(Math.pow(n.position().x - centerX, 2) + Math.pow(n.position().y - centerY, 2)); if (!maxDistPerLevel[d] || dist + 80 > maxDistPerLevel[d]) maxDistPerLevel[d] = dist + 80; }); const colors = ['rgba(254, 226, 226, 0.5)', 'rgba(254, 249, 195, 0.5)', 'rgba(220, 252, 231, 0.5)', 'rgba(224, 242, 254, 0.5)']; Object.keys(maxDistPerLevel).map(Number).sort((a,b) => b - a).forEach(l => { ctx.beginPath(); ctx.arc(centerX, centerY, maxDistPerLevel[l], 0, 2 * Math.PI); ctx.fillStyle = colors[l] || 'rgba(241, 245, 249, 0.5)'; ctx.fill(); }); };
+                const calculateGlobalDepths = (tableList, pMap) => { const getDepth = (name, v=new Set()) => { if (v.has(name)) return 0; if (dynamicDescendantCache.value[name + '_d'] !== undefined) return dynamicDescendantCache.value[name + '_d']; const parents = pMap[name] || []; if (parents.length === 0) return 0; v.add(name); let maxD = 0; parents.forEach(p => { const d = getDepth(p, new Set(v)); if(d > maxD) maxD = d; }); dynamicDescendantCache.value[name + '_d'] = 1 + maxD; return 1 + maxD; }; let maxD = 0; tableList.forEach(t => { t.depth = getDepth(t.name); if (t.depth > maxD) maxD = t.depth; }); maxDepth.value = maxD; };
+                const processFiles = () => { 
+                    try { 
+                        errorMsg.value = ''; 
+                        const metadataMap = {}; 
+                        if (csvContent.value) { 
+                            const parsed = Papa.parse(csvContent.value, { header: true, skipEmptyLines: true });
+                            
+                            // DYNAMIC HEADER DETECTION
+                            if (parsed.meta && parsed.meta.fields) {
+                                const standardHeaders = ['table name', 'tablename', 'group name', 'group', 'tier'];
+                                // Identify flag columns (any column not in standardHeaders)
+                                customFlagNames.value = parsed.meta.fields.filter(f => !standardHeaders.includes(f.toLowerCase().trim()));
+                            }
+
+                            parsed.data.forEach(row => { 
+                                const name = (row['Table name'] || row['Table Name'] || row['tablename'])?.trim(); 
+                                if(!name) return; 
+                                
+                                // Check for flag values
+                                const checkFlag = (val) => { const v = (val||'').toLowerCase(); return v.includes('✓') || v === 'y' || v === 'yes' || v === 'true' || v === '1'; };
+                                
+                                const dynamicFlags = {};
+                                customFlagNames.value.forEach(flag => {
+                                    dynamicFlags[flag] = checkFlag(row[flag]);
+                                });
+
+                                metadataMap[name] = { 
+                                    name, 
+                                    group: (row['Group name'] || 'Unknown').trim(), 
+                                    tier: (row['Tier'] || '?').trim(), 
+                                    flags: dynamicFlags, // Store dynamic flags here
+                                    isFocus: true // Was isMigration
+                                }; 
+                            }); 
+                        } 
+                        
+                        let cleanDDL = ddlContent.value;
+                        cleanDDL = cleanDDL.replace(/--.*$/gm, '');
+                        // 2. Remove Backticks (Global cleanup)
+                        cleanDDL = cleanDDL.replace(/`/g, '');
+                        // 3. Normalize CREATE TABLE
+                        cleanDDL = cleanDDL.replace(/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS/gi, 'CREATE TABLE');
+                        
+                        const meta = {}; 
+                        const rels = {}; 
+                        const parents = {};
+
+                        // Helper to add relationship
+                        const addRelation = (child, parent, fkName, refCol) => {
+                            if(child === parent) return;
+                            if(!rels[parent]) rels[parent]=[]; 
+                            if(!rels[parent].includes(child)) rels[parent].push(child);
+                            
+                            if(!parents[child]) parents[child]=[]; 
+                            if(!parents[child].includes(parent)) parents[child].push(parent);
+                            
+                            if(!meta[child]) meta[child]={parents:[], hasAppIdCol:false, rawDDL:''};
+                            
+                            // Avoid duplicates
+                            if (!meta[child].parents.some(p => p.fk === fkName && p.name === parent)) {
+                                meta[child].parents.push({name: parent, fk: fkName, ref: refCol});
+                            }
+                        };
+
+                        cleanDDL.split(/CREATE\s+TABLE/i).forEach(block => { 
+                            if(!block.trim()) return; 
+                            // Adjusted regex for optional schema and table name
+                            const m = block.match(/^\s*(?:ngl\.|public\.)?([a-z0-9_]+)/i); 
+                            if(m) { 
+                                const t = m[1]; 
+                                // Clean up the body to just the definition part inside first parens... tricky with nested parens
+                                // Simplified approach: take until semicolon
+                                const ddlBody = block.split(';')[0]; 
+                                
+                                meta[t] = { 
+                                    parents: meta[t]?.parents || [], // Preserve if already init
+                                    hasAppIdCol: new RegExp('\\bapplication_id\\b', 'i').test(ddlBody), 
+                                    rawDDL: 'CREATE TABLE ' + ddlBody + ';' 
+                                };
+
+                                // 4. Parse Inline Foreign Keys (New in v1.08.2)
+                                // Pattern: CONSTRAINT `name` FOREIGN KEY (`col`) REFERENCES `table` (`col`)
+                                const inlineFkRegex = /CONSTRAINT\s+([a-z0-9_]+)\s+FOREIGN\s+KEY\s*\(([a-z0-9_]+)\)\s+REFERENCES\s+(?:[a-z0-9_]+\.)?([a-z0-9_]+)\s*\(([a-z0-9_]+)\)/gi;
+                                let ifk;
+                                while ((ifk = inlineFkRegex.exec(ddlBody)) !== null) {
+                                    const fkName = ifk[1];
+                                    const fkCol = ifk[2];
+                                    const refTable = ifk[3];
+                                    const refCol = ifk[4];
+                                    addRelation(t, refTable, fkCol, refCol);
+                                }
+                            } 
+                        }); 
+                        
+                        // Parse Triggers (Improved v1.08.3 - Inline SQL Display)
+                        const triggers = {};
+                        // Capture everything between FOR EACH ROW and the next CREATE/ALTER statement
+                        const triggerRegex = /CREATE\s+TRIGGER\s+([a-z0-9_]+)\s+([\s\S]+?)\s+ON\s+([a-z0-9_]+)\s+FOR\s+EACH\s+ROW\s+([\s\S]+?)(?=\s*(?:CREATE|ALTER|DROP|$))/gi;
+                        let tm;
+                        while ((tm = triggerRegex.exec(cleanDDL)) !== null) {
+                           const tName = tm[1];
+                           const tEventRaw = tm[2].replace(/\s+/g, ' ').trim().toUpperCase(); // e.g. BEFORE INSERT
+                           const tTable = tm[3];
+                           const body = tm[4].trim();
+
+                           // Detect if body is a simple function call (Postgres style)
+                           let displayFunc = 'Inline SQL';
+                           let displayArgs = '';
+
+                           const execMatch = body.match(/EXECUTE\s+(?:FUNCTION|PROCEDURE)\s+(?:[a-z0-9_]+\.)?([a-z0-9_]+)\(([\s\S]*?)\)/i);
+                           if (execMatch) {
+                               displayFunc = execMatch[1];
+                               displayArgs = execMatch[2] ? execMatch[2].trim() : '';
+                           } else {
+                               // It's inline SQL, truncate for display
+                               // Collapse whitespace
+                               const flatBody = body.replace(/\s+/g, ' ');
+                               if (flatBody.length > 80) {
+                                    displayFunc = flatBody.substring(0, 77) + '...';
+                               } else {
+                                    displayFunc = flatBody;
+                               }
+                               displayArgs = null; // Marker for no parens
+                           }
+
+                           if (!triggers[tTable]) triggers[tTable] = [];
+                           triggers[tTable].push({ name: tName, event: tEventRaw, func: displayFunc, args: displayArgs });
+                        }
+
+                        // Parse ALTER TABLE Foreign Keys (Legacy support)
+                        const fkPattern = "ALTER\\s+TABLE\\s+(?:ngl\\.|public\\.)?([a-z0-9_]+)\\s+ADD\\s+CONSTRAINT\\s+.*?\\s+FOREIGN\\s+KEY\\s*\\((.*?)\\)\\s+REFERENCES\\s+(?:ngl\\.|public\\.)?([a-z0-9_]+)(?:\\s*\\((.*?)\\))?"; 
+                        const fkRegex = new RegExp(fkPattern, "gi"); 
+                        let m; 
+                        while ((m = fkRegex.exec(cleanDDL)) !== null) { 
+                            const c = m[1];
+                            const fk = m[2];
+                            const p = m[3];
+                            const ref = m[4] || 'id';
+                            addRelation(c, p, fk, ref);
+                        } 
+                        
+                        Object.keys(meta).forEach(k => {
+                            if(triggers[k]) meta[k].triggers = triggers[k];
+                        });
+
+                        relationships.value = rels; parentMap.value = parents; sqlMetadata.value = meta; 
+                        
+                        // Merge Data
+                        tables.value = Object.keys(meta).map(n => metadataMap[n] || { 
+                            name: n, 
+                            group: 'In DDL Only', 
+                            tier: '?', 
+                            flags: {}, // Empty flags for non-CSV tables
+                            isFocus: false 
+                        }).sort((a,b)=>a.name.localeCompare(b.name)); 
+                        
+                        calculateGlobalDepths(tables.value, parents); recalculateAllStats(); isDataLoaded.value = true; 
+                    } catch (e) { errorMsg.value = e.message; } 
+                };
+                
+                const toggleTier = (t) => { if(filters.tiers.has(t)) filters.tiers.delete(t); else filters.tiers.add(t); recalculateAllStats(); };
+                const toggleLevel = (l) => { if(filters.levels.has(l)) filters.levels.delete(l); else filters.levels.add(l); recalculateAllStats(); };
+                const toggleCustomFlag = (flag) => { if(filters.dynamicFlags.has(flag)) filters.dynamicFlags.delete(flag); else filters.dynamicFlags.add(flag); recalculateAllStats(); };
+                const clearFilters = () => { filters.focusOnly=false; filters.tiers.clear(); filters.levels.clear(); filters.dynamicFlags.clear(); filters.leafOnly=false; recalculateAllStats(); };
+                const activeFilterCount = computed(() => (filters.focusOnly?1:0) + filters.tiers.size + filters.levels.size + filters.dynamicFlags.size + (filters.leafOnly?1:0));
+                
+                const availableLevels = computed(() => { const levels = []; for(let i=0; i<=maxDepth.value; i++) levels.push(i); return levels; });
+                const isVisible = (n) => { 
+                    const t = tables.value.find(tbl => tbl.name === n); 
+                    if(!t) return false; 
+                    if(filters.focusOnly && !t.isFocus) return false; 
+                    if(filters.tiers.size > 0 && !filters.tiers.has(t.tier)) return false; 
+                    
+                    // Dynamic Flag Logic
+                    if (filters.dynamicFlags.size > 0) {
+                        for (const flag of filters.dynamicFlags) {
+                            if (!t.flags || !t.flags[flag]) return false;
+                        }
+                    }
+                    
+                    if(filters.levels.size > 0 && !filters.levels.has(t.depth)) return false; 
+                    if(filters.leafOnly) { const children = relationships.value[n] || []; if (children.length > 0) return false; } 
+                    return true; 
+                };
+                
+                const buildFilteredTree = (n, v=new Set()) => { if(v.has(n)) return null; v.add(n); let c = relationships.value[n] || []; c = c.filter(child => isVisible(child)); const nodes = c.map(child => buildFilteredTree(child, new Set(v))).filter(x => x); const t = tables.value.find(tbl => tbl.name === n) || {}; return { name: n, isFocus: t.isFocus, flags: t.flags, children: nodes }; };
+                const calculateDescendants = (n, v=new Set()) => { if(v.has(n)) return new Set(); v.add(n); let d = new Set(), c = relationships.value[n] || []; c = c.filter(child => isVisible(child)); c.forEach(child => { d.add(child); calculateDescendants(child, new Set(v)).forEach(x => d.add(x)); }); return d; };
+                const calculateAncestorStats = (n) => { if(!n) return {direct:0, total:0}; let dParents = parentMap.value[n] || []; dParents = dParents.filter(p => isVisible(p)); const getAnc = (tName, v=new Set()) => { if(v.has(tName)) return new Set(); v.add(tName); let a = new Set(), parents = parentMap.value[tName] || []; parents = parents.filter(p => isVisible(p)); parents.forEach(p => { a.add(p); getAnc(p, new Set(v)).forEach(x => a.add(x)); }); return a; }; return { direct: dParents.length, total: getAnc(n).size }; };
+                const ancestorStats = computed(() => selectedTable.value ? calculateAncestorStats(selectedTable.value.name) : {direct:0, total:0});
+                const recalculateAllStats = () => { const cache = {}; tables.value.forEach(t => cache[t.name] = calculateDescendants(t.name).size); dynamicDescendantCache.value = cache; };
+                watch(() => [filters.focusOnly, filters.dynamicFlags.size, filters.levels.size, filters.leafOnly], () => recalculateAllStats());
+                const filteredTables = computed(() => { let r = tables.value; if(searchQuery.value) { const q = searchQuery.value.toLowerCase(); r = r.filter(t => t.name.toLowerCase().includes(q) || t.group.toLowerCase().includes(q)); } r = r.filter(t => isVisible(t.name)); if (sortBy.value === 'name') r.sort((a,b) => a.name.localeCompare(b.name)); else if (sortBy.value === 'level_asc') r.sort((a,b) => a.depth - b.depth || a.name.localeCompare(b.name)); else if (sortBy.value === 'level_desc') r.sort((a,b) => b.depth - a.depth || a.name.localeCompare(b.name)); return r; });
+                const filteredChildrenTree = computed(() => selectedTable.value ? (relationships.value[selectedTable.value.name]||[]).filter(c=>isVisible(c)).map(c=>buildFilteredTree(c)) : []);
+                const filteredParents = computed(() => selectedTable.value ? (parentMap.value[selectedTable.value.name]||[]).filter(p=>isVisible(p)) : []);
+                const getTierClass = (t) => t=='1'?'bg-red-50 text-red-600 border-red-200':(t=='2'?'bg-orange-50 text-orange-600 border-orange-200':(t=='3'?'bg-slate-50 text-slate-600 border-slate-200':'bg-white text-slate-400 border-slate-100'));
+                const getDynamicChildCount = (n) => (relationships.value[n]||[]).filter(c=>isVisible(c)).length;
+                const getDynamicDescendantCount = (n) => dynamicDescendantCache.value[n]||0;
+                const reset = () => { isDataLoaded.value=false; ddlContent.value=null; csvContent.value=null; ddlFileName.value=''; csvFileName.value=''; selectedTable.value=null; clearFilters(); customFlagNames.value = []; };
+
+                const appInfo = useAppInfo();
+
+                return {
+                    isDataLoaded, ddlFileName, csvFileName, errorMsg, handleDDLUpload, handleCSVUpload, processFiles, reset,
+                    tables, filteredTables, searchQuery, selectedTable, selectTable:(t)=>selectedTable.value=t, selectByName:(n)=>{const t=tables.value.find(x=>x.name===n); if(t) selectedTable.value=t;},
+                    filteredChildrenTree, filteredParents, getTierClass, getDynamicChildCount, getDynamicDescendantCount,
+                    ddlContent, csvContent, filters, toggleTier, activeFilterCount, clearFilters,
+                    showSqlDialog, openSqlModal, generatedSql, copySql, ancestorStats,
+                    sortBy, availableLevels, toggleLevel, recalculateAllStats,
+                    showERDialog, openERModal,
+                    // AI Exports
+                    showAiModal, openAiModal, openGlobalAiModal, activeAiTab, userApiKey, showApiKeyInput, hasApiKey, saveApiKey,
+                    isLoading, aiResponse, generateInsight, // Removed parsedAiResponse
+                    userQueryPrompt, aiSqlResponse, generateSqlFromText, copyAiSql,
+                    copySuccess, dbDialect, aiContextTables,
+                    // Chat (New v1.3)
+                    userChatInput, chatMessages, sendChatMessage,
+                    renderMarkdown, aiMode, // FIX 1 & 4
+                    // Tools
+                    showDataDictModal, openDataDictModal, parsedColumns, exportDataDictCSV,
+                    showImpactModal, openImpactModal, impactSearchCol, analyzeImpact, impactResults, copyImpactList, selectByNameAndClose,
+                    showMockModal, openMockModal, generateMockData, mockDataSql, copyText,
+                    // Impact Option (FIX 2)
+                    impactSearchMode, totalImpactCount,
+                    // Active Triggers (Lazy)
+                    activeTriggers,
+                    // App Info
+                    ...appInfo,
+                    // Dynamic Flags
+                    customFlagNames, toggleCustomFlag
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
