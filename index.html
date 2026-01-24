@@ -3,7 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Schema Analyzer AI Powered v1.09.2</title>
+    <title>Schema Analyzer AI Powered v1.12.6</title>
+    
+    <!-- Global Error Handler (New Feature) -->
+    <script>
+        window.onerror = function (msg, url, lineNo, columnNo, error) {
+            const container = document.createElement('div');
+            container.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ef4444;color:white;padding:16px;z-index:99999;font-family:monospace;font-size:14px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);border-bottom: 2px solid #b91c1c;';
+            container.innerHTML = `<strong>🔥 System Error Detected:</strong><br>${msg}<br><span style="opacity:0.8;font-size:12px;">Line: ${lineNo} | Column: ${columnNo}</span>`;
+            document.body.appendChild(container);
+            return false;
+        };
+    </script>
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Vue.js -->
@@ -76,7 +88,7 @@
             <div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full text-center relative">
                 <i class="ph ph-database text-6xl text-blue-500 mb-4"></i>
                 <h1 class="text-2xl font-bold text-slate-800 mb-2">Schema Analyzer AI Powered</h1>
-                <p class="text-slate-500 mb-8">Version 1.09.2 (Stable Fix)</p>
+                <p class="text-slate-500 mb-8">Version 1.12.6</p>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="border-2 border-dashed rounded-lg p-6 transition-colors relative cursor-pointer group"
@@ -86,6 +98,10 @@
                         <p class="font-semibold text-slate-700">1. Upload DDL File <span class="text-red-500">*</span></p>
                         <p class="text-xs text-slate-400 mt-1" v-if="!ddlFileName">Required (e.g. DDL_sample.sql)</p>
                         <p class="text-xs text-blue-600 font-bold mt-1" v-else><i class="ph ph-check"></i> {{ ddlFileName }}</p>
+                        <!-- Example Download -->
+                        <div class="absolute bottom-2 right-2 pointer-events-auto z-10">
+                            <button @click.stop="downloadExampleDDL" class="text-[10px] text-blue-400 hover:text-blue-600 hover:underline">Download Example</button>
+                        </div>
                     </div>
 
                     <div class="border-2 border-dashed rounded-lg p-6 transition-colors relative cursor-pointer group"
@@ -95,6 +111,10 @@
                         <p class="font-semibold text-slate-700">2. Upload Table Focus</p>
                         <p class="text-xs text-slate-400 mt-1" v-if="!csvFileName">Optional (CSV for filtering)</p>
                         <p class="text-xs text-green-600 font-bold mt-1" v-else><i class="ph ph-check"></i> {{ csvFileName }}</p>
+                        <!-- Example Download -->
+                        <div class="absolute bottom-2 right-2 pointer-events-auto z-10">
+                            <button @click.stop="downloadExampleCSV" class="text-[10px] text-green-400 hover:text-green-600 hover:underline">Download Example</button>
+                        </div>
                     </div>
                 </div>
 
@@ -112,7 +132,7 @@
 
                 <!-- Version Button -->
                 <button @click="showVersionModal = true" class="absolute bottom-4 right-4 text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
-                    <i class="ph ph-info"></i> v1.09.2
+                    <i class="ph ph-info"></i> v1.12.6
                 </button>
             </div>
         </div>
@@ -173,6 +193,7 @@
                             
                             <select v-model="sortBy" class="ml-auto text-xs border border-slate-300 rounded-md py-1 px-2 bg-white text-slate-600 outline-none focus:border-blue-400">
                                 <option value="name">Sort: Name</option>
+                                <option value="group">Sort: Group</option>
                                 <option value="level_asc">Sort: Top-Down</option>
                                 <option value="level_desc">Sort: Bottom-Up</option>
                             </select>
@@ -220,7 +241,13 @@
                          :class="selectedTable?.name === table.name ? 'bg-white border-blue-400 ring-2 ring-blue-100 shadow-md z-10' : 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-sm'">
                         <div class="flex justify-between items-start mb-1">
                             <span class="font-semibold text-sm text-slate-700 break-all leading-tight mr-1" :class="{'text-blue-700': selectedTable?.name === table.name}">{{ table.name }}</span>
-                            <div class="flex gap-1">
+                            <div class="flex gap-1 items-center">
+                                <!-- UPDATED: Group Badge G0X format -->
+                                <span v-if="table.group && table.group !== 'In DDL Only' && table.group !== 'Unknown'" 
+                                      class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 truncate max-w-[60px]" 
+                                      :title="table.group">
+                                    {{ formatGroupBadge(table.group) }}
+                                </span>
                                 <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 min-w-[24px] text-center" title="Hierarchy Level">L{{ table.depth }}</span>
                                 <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap shadow-sm" :class="getTierClass(table.tier)">T{{ table.tier }}</span>
                             </div>
@@ -256,7 +283,14 @@
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden transition-all duration-300" :class="activeFilterCount > 0 ? 'ring-2 ring-green-100' : ''">
                         <div class="relative z-10">
                             <div class="flex items-center gap-2 mb-2">
-                                <span class="px-2 py-0.5 text-xs font-bold rounded bg-slate-100 text-slate-600 border border-slate-200">{{ selectedTable.group || 'No Group' }}</span>
+                                <!-- UPDATED: Group Badge in Main Header -->
+                                <span v-if="selectedTable.group && selectedTable.group !== 'In DDL Only' && selectedTable.group !== 'Unknown'" 
+                                      class="px-2 py-0.5 text-xs font-bold rounded bg-slate-100 text-slate-600 border border-slate-200 cursor-help"
+                                      :title="selectedTable.group">
+                                    {{ formatGroupBadge(selectedTable.group) }}
+                                </span>
+                                <span v-else class="px-2 py-0.5 text-xs font-bold rounded bg-slate-100 text-slate-600 border border-slate-200">No Group</span>
+
                                 <span class="px-2 py-0.5 text-xs font-bold rounded" :class="getTierClass(selectedTable.tier)">Tier {{ selectedTable.tier || '?' }}</span>
                                 <span class="px-2 py-0.5 text-xs font-bold rounded bg-indigo-50 text-indigo-600 border border-indigo-100">Level {{ selectedTable.depth }}</span>
                                 <!-- Tool Buttons -->
@@ -326,7 +360,12 @@
         <div v-if="showDataDictModal" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 modal-enter-active">
             <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[85vh] overflow-hidden">
                 <div class="p-4 bg-teal-700 text-white flex justify-between items-center">
-                    <h3 class="font-bold flex items-center gap-2"><i class="ph ph-book-open-text text-teal-300"></i> Data Dictionary: {{ selectedTable?.name }}</h3>
+                    <!-- UPDATED: Added Badges to Header -->
+                    <h3 class="font-bold flex items-center gap-2">
+                        <i class="ph ph-book-open-text text-teal-300"></i> Data Dictionary: {{ selectedTable?.name }}
+                        <span v-if="selectedTable?.isFocus" class="ml-2 text-[10px] bg-slate-700 text-white px-1.5 py-0.5 rounded border border-slate-600 shadow-sm font-normal">FOCUS</span>
+                        <span v-for="(val, key) in selectedTable?.flags" :key="key" v-show="val" class="ml-1 text-[10px] bg-teal-600 text-teal-100 px-1.5 py-0.5 rounded border border-teal-500 font-normal">{{ key }}</span>
+                    </h3>
                     <div class="flex items-center gap-2"><button @click="exportDataDictCSV" class="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1"><i class="ph ph-download-simple"></i> CSV</button><button @click="showDataDictModal = false" class="hover:text-teal-200"><i class="ph ph-x text-xl"></i></button></div>
                 </div>
                 <div class="p-6 overflow-y-auto bg-slate-50 flex-1 flex flex-col gap-6">
@@ -367,11 +406,18 @@
                     <div v-if="activeTriggers && activeTriggers.length > 0" class="border rounded-lg p-4 bg-slate-50 border-slate-200">
                         <h4 class="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><i class="ph ph-lightning text-yellow-500"></i> Triggers & Bound Functions</h4>
                         <ul class="space-y-2">
-                            <li v-for="trig in activeTriggers" :key="trig.name" class="flex items-start gap-2 text-xs bg-white p-2 rounded border border-slate-200 shadow-sm">
-                                <span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider text-[10px] border border-orange-200">{{ trig.event }}</span>
-                                <span class="font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">{{ trig.name }}</span>
-                                <span class="text-slate-400">executes</span>
-                                <span class="font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded" :title="trig.func">{{ trig.func }}<span v-if="trig.args">({{ trig.args }})</span></span>
+                            <li v-for="trig in activeTriggers" :key="trig.name" class="flex flex-col gap-1 text-xs bg-white p-2 rounded border border-slate-200 shadow-sm">
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider text-[10px] border border-orange-200">{{ trig.event }}</span>
+                                    <span class="font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">{{ trig.name }}</span>
+                                </div>
+                                <div v-if="trig.func" class="mt-1 ml-1 flex items-center gap-1">
+                                    <span class="text-slate-400">executes</span>
+                                    <span class="font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded" :title="trig.func">{{ trig.func }}<span v-if="trig.args">({{ trig.args }})</span></span>
+                                </div>
+                                <div v-if="trig.body" class="mt-1 ml-1">
+                                    <pre class="bg-slate-100 p-2 rounded text-[10px] text-slate-600 font-mono overflow-x-auto border border-slate-200 max-h-32">{{ trig.body }}</pre>
+                                </div>
                             </li>
                         </ul>
                     </div>
@@ -406,17 +452,43 @@
                         </select>
                         <button @click="analyzeImpact" class="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition"><i class="ph ph-magnifying-glass"></i></button>
                     </div>
+                    
+                    <!-- NEW: Dynamic Flag Filters for Impact (Moved OUTSIDE results check) -->
+                    <div class="flex flex-wrap gap-2 mb-4 pb-3 border-b border-slate-100 items-center">
+                         <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center mr-2">Filter (AND):</div>
+                         
+                         <!-- Added FOCUS Filter -->
+                         <button @click="impactFocusOnly = !impactFocusOnly"
+                                 class="px-2 py-0.5 text-[10px] font-bold border rounded-md uppercase tracking-wider transition-all flex items-center gap-1"
+                                 :class="impactFocusOnly ? 'bg-slate-700 text-white border-slate-800 ring-1 ring-slate-600' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'">
+                             <i class="ph ph-crosshair"></i> Focus
+                         </button>
 
-                    <div v-if="impactResults && impactResults.length > 0">
+                         <button v-for="flag in customFlagNames" :key="flag" 
+                                 @click="toggleImpactFlag(flag)"
+                                 class="px-2 py-0.5 text-[10px] font-bold border rounded-md uppercase tracking-wider transition-all"
+                                 :class="impactActiveFlags.has(flag) ? 'bg-orange-100 text-orange-700 border-orange-300 ring-1 ring-orange-200' : 'bg-white text-slate-400 border-slate-200 hover:border-orange-200 hover:text-orange-500'">
+                             {{ flag }}
+                         </button>
+                         <button v-if="impactActiveFlags.size > 0 || impactFocusOnly" @click="clearImpactFilters" class="text-[10px] text-red-400 hover:text-red-600 ml-auto underline">Clear</button>
+                    </div>
+
+                    <div v-if="filteredImpactResults && filteredImpactResults.length > 0">
                         <div class="flex justify-between items-center mb-4">
-                            <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">Impact Hierarchy <span class="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full text-[10px] border border-orange-200">Total: {{ totalImpactCount }} Tables</span></h4>
+                            <!-- UPDATED: Use filteredImpactCount -->
+                            <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">Impact Hierarchy <span class="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full text-[10px] border border-orange-200">Total: {{ filteredImpactCount }} / {{ totalImpactCount }} Tables</span></h4>
                             <button @click="copyImpactList" class="text-xs bg-white border border-slate-300 text-slate-600 px-2 py-1 rounded hover:bg-slate-50 flex items-center gap-1"><i class="ph ph-copy"></i> Copy List</button>
                         </div>
                         <div class="bg-white rounded border border-slate-200 p-4">
-                             <impact-node v-for="node in impactResults" :key="node.name" :node="node" @select="selectByNameAndClose"></impact-node>
+                             <!-- UPDATED: Use filteredImpactResults, FIX: Pass formatGroupBadge prop to root node -->
+                             <impact-node v-for="node in filteredImpactResults" :key="node.name" :node="node" :format-group-badge="formatGroupBadge" @select="selectByNameAndClose"></impact-node>
                         </div>
                     </div>
                     <div v-else-if="impactResults && impactResults.length === 0" class="text-center text-slate-400 py-10">No tables found containing this column.</div>
+                    <div v-else-if="impactResults && filteredImpactResults.length === 0" class="text-center text-slate-400 py-10">
+                        <i class="ph ph-funnel-x text-3xl mb-2 opacity-50"></i>
+                        <p class="text-sm">Matches found, but hidden by current filters.</p>
+                    </div>
                     <div v-else class="text-center text-slate-400 py-10"><i class="ph ph-magnifying-glass text-4xl mb-2 opacity-50"></i><p class="text-sm">Search to see which tables contain a specific column.</p></div>
                 </div>
             </div>
@@ -501,20 +573,30 @@
         </div></div></div>
         <div v-if="showERDialog" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 modal-enter-active"><div class="bg-white rounded-xl shadow-2xl w-full h-full max-w-[95vw] max-h-[90vh] flex flex-col relative overflow-hidden"><div class="p-3 border-b flex justify-between items-center bg-slate-800 text-white shrink-0"><div class="flex items-center gap-3"><h3 class="font-bold flex items-center gap-2"><i class="ph ph-tree-structure text-indigo-400"></i> ER Diagram</h3><span class="text-xs bg-slate-700 px-2 py-0.5 rounded text-slate-300">Filtered: {{ filteredTables.length }} tables</span></div><div class="flex items-center gap-4"><div class="text-[10px] text-slate-400 flex gap-2"><span class="flex items-center gap-1"><i class="ph ph-mouse-left-click"></i> Pan</span><span class="flex items-center gap-1"><i class="ph ph-mouse-wheel"></i> Zoom</span></div><button @click="showERDialog = false" class="hover:text-red-300 transition-colors"><i class="ph ph-x text-2xl"></i></button></div></div><div class="flex-1 relative cy-wrapper"><canvas id="bgCanvas"></canvas><div id="cy"></div><div class="absolute bottom-4 left-4 bg-white/90 backdrop-blur p-3 rounded-lg shadow border border-slate-200 text-xs z-10 pointer-events-none"><div class="font-bold mb-1 text-slate-700">Level Zones</div><div class="flex items-center gap-2 mb-1"><span class="w-3 h-3 rounded-full bg-red-100 border border-red-200"></span> L0 (Root)</div><div class="flex items-center gap-2 mb-1"><span class="w-3 h-3 rounded-full bg-yellow-100 border border-yellow-200"></span> L1</div><div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-100 border border-green-200"></span> L2</div></div></div></div></div>
 
-        <div class="watermark">generate by "Wittawas P"</div>
+        <div class="watermark">AI generated by "wittawas.p"</div>
 
     </div>
 
-    <!-- Impact Node Template (Recursive) -->
+    <!-- UPDATED: Impact Node Template (Recursive) to show flags -->
     <script type="text/x-template" id="impact-node-template">
         <div class="pl-4 border-l-2 border-slate-100 relative">
-            <div class="flex items-center gap-2 py-1 group cursor-pointer hover:bg-orange-50 rounded px-2 -ml-2" @click.stop="$emit('select', node.name)">
+            <!-- UPDATED: Click uses realName to avoid Cycle string issues -->
+            <div class="flex items-center gap-2 py-1 group cursor-pointer hover:bg-orange-50 rounded px-2 -ml-2" @click.stop="$emit('select', node.realName || node.name)">
                 <div class="w-2 h-2 rounded-full bg-orange-400"></div>
                 <span class="font-mono text-sm text-slate-700 group-hover:text-orange-700 font-medium">{{ node.name }}</span>
+                <!-- Show Focus badge -->
+                <span v-if="node.isFocus" class="text-[7px] font-bold px-0.5 rounded bg-slate-700 text-white border border-slate-600 ml-1">F</span>
+                <!-- NEW: Show Group Badge -->
+                <span v-if="node.group" class="text-[7px] font-bold px-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 ml-1" :title="node.group">{{ formatGroupBadge(node.group) }}</span>
+                <!-- Show flags in impact tree -->
+                <span v-for="(val, key) in node.flags" :key="key" v-show="val" 
+                      class="text-[7px] font-bold px-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200 ml-1">
+                    {{ key.substring(0,1).toUpperCase() }}
+                </span>
                 <span v-if="node.children.length" class="text-xs text-slate-400">({{ node.children.length }} refs)</span>
             </div>
             <div v-if="node.children && node.children.length">
-                <impact-node v-for="child in node.children" :key="child.name" :node="child" @select="$emit('select', $event)"></impact-node>
+                <impact-node v-for="child in node.children" :key="child.name" :node="child" :format-group-badge="formatGroupBadge" @select="$emit('select', $event)"></impact-node>
             </div>
         </div>
     </script>
@@ -551,7 +633,7 @@
         const ImpactNode = {
             name: 'impact-node',
             template: '#impact-node-template',
-            props: ['node'],
+            props: ['node', 'formatGroupBadge'], // Added prop for recursive usage
             emits: ['select']
         };
 
@@ -590,6 +672,8 @@
                 const mockDataSql = ref('');
                 const impactSearchMode = ref('exact'); 
                 const totalImpactCount = ref(0);
+                const impactActiveFlags = reactive(new Set()); 
+                const impactFocusOnly = ref(false); // NEW: Impact Focus Filter
 
                 // AI Variables
                 const showAiModal = ref(false);
@@ -615,17 +699,17 @@
                 // Version Info
                 const showVersionModal = ref(false);
                 const moduleVersions = reactive({
-                    'App Core': 'v1.09.2',
-                    'Upload': 'v1.4.1 (Safe Replace Fix)',
+                    'App Core': 'v1.12.6', // UPDATED
+                    'Upload': 'v1.5.1', // UPDATED: Removed change description
                     'AI Global': 'v2.2',
-                    'AI Text-to-SQL': 'v1.2',
+                    'AI Text-to-SQL': 'v1.3 (Removed Prefix Constraint)', 
                     'Child tree-view (Hierarchy)': 'v1.0',
-                    'Impact Analyst': 'v1.3 (Restored & Fixed)',
-                    'Data dict': 'v1.6 (Row Number Added)',
-                    'Mock data': 'v1.0',
-                    'SQL for application_id': 'v1.0',
+                    'Impact Analyst': 'v1.9 (Fix formatGroupBadge function)', 
+                    'Data dict': 'v1.8 (Enhanced Trigger Parsing)', 
+                    'Mock data': 'v1.1 (Removed schema prefix)', 
+                    'SQL for application_id': 'v1.1', // UPDATED: v1.1
                     'Filter': 'v1.2',
-                    'Table list view': 'v1.2',
+                    'Table list view': 'v1.4.0 (Group G01 Badge)', 
                     'ER Diagram': 'v1.0'
                 });
 
@@ -648,6 +732,71 @@
                 
                 const availableLevels = computed(() => { const levels = []; for(let i=0; i<=maxDepth.value; i++) levels.push(i); return levels; });
 
+                // NEW: Logic for filtering Impact Tree
+                const filterImpactNode = (node) => {
+                    // Logic: If NO filters active, show everything
+                    if (impactActiveFlags.size === 0 && !impactFocusOnly.value) return node;
+
+                    // UPDATED: Strict AND Logic for Impact Filters
+                    let match = true;
+
+                    // 1. Check Focus (Strict AND)
+                    if (impactFocusOnly.value && !node.isFocus) {
+                        match = false;
+                    }
+
+                    // 2. Check Flags (Strict AND for ALL selected flags)
+                    if (match && impactActiveFlags.size > 0) {
+                        if (!node.flags) {
+                             match = false;
+                        } else {
+                            for (const flag of impactActiveFlags) {
+                                if (!node.flags[flag]) {
+                                    match = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Check children
+                    const children = node.children || [];
+                    const filteredChildren = children.map(c => filterImpactNode(c)).filter(c => c !== null);
+
+                    // Keep if self is hit OR has matching children
+                    if (match || filteredChildren.length > 0) {
+                        return { ...node, children: filteredChildren };
+                    }
+
+                    return null;
+                };
+
+                const filteredImpactResults = computed(() => {
+                    if (!impactResults.value) return null;
+                    if (impactActiveFlags.size === 0 && !impactFocusOnly.value) return impactResults.value;
+
+                    return impactResults.value.map(root => filterImpactNode(root)).filter(root => root !== null);
+                });
+
+                // UPDATED: Count unique tables in filtered view (using realName for cycles)
+                const filteredImpactCount = computed(() => {
+                    if (!filteredImpactResults.value) return 0;
+                    const unique = new Set();
+                    
+                    const traverse = (nodes) => {
+                        nodes.forEach(n => {
+                            // Use realName if available (for cycles), else name
+                            unique.add(n.realName || n.name);
+                            if (n.children && n.children.length > 0) {
+                                traverse(n.children);
+                            }
+                        });
+                    };
+                    
+                    traverse(filteredImpactResults.value);
+                    return unique.size;
+                });
+
                 // ---------------------------------------------------------
                 // 3. HELPER FUNCTIONS
                 // ---------------------------------------------------------
@@ -663,6 +812,69 @@
                 const copyAiSql = () => { const temp = document.createElement('div'); temp.innerHTML = aiSqlResponse.value; copyText(temp.innerText); };
                 const renderMarkdown = (text) => { if (!text) return ''; if (typeof marked !== 'undefined' && marked.parse) { return marked.parse(text); } return text; };
 
+                // NEW: Download Helper
+                const downloadFile = (filename, content) => {
+                    const element = document.createElement('a');
+                    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
+                    element.setAttribute('download', filename);
+                    element.style.display = 'none';
+                    document.body.appendChild(element);
+                    element.click();
+                    document.body.removeChild(element);
+                };
+
+                const downloadExampleDDL = () => {
+                    const content = `CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE orders (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    order_date DATE DEFAULT CURRENT_DATE,
+    CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE order_items (
+    id SERIAL PRIMARY KEY,
+    order_id INT NOT NULL,
+    product_name VARCHAR(100),
+    quantity INT DEFAULT 1,
+    CONSTRAINT fk_order FOREIGN KEY (order_id) REFERENCES orders(id)
+);`;
+                    downloadFile('example_ddl.sql', content);
+                };
+
+                const downloadExampleCSV = () => {
+                    // UPDATED: Changed example headers
+                    const content = `Table name,Group,Tier,important,is_transaction
+users,Group 1,1,Y,
+orders,Group 1,2,Y,Y
+order_items,Group 2,3,,Y`;
+                    downloadFile('example_focus.csv', content);
+                };
+
+                // UPDATED: Format Group Badge
+                const formatGroupBadge = (groupName) => {
+                    if (!groupName || groupName === 'Unknown') return '';
+                    
+                    // Case 1: "Group X" or just "X" -> "G0X"
+                    // Regex looks for "Group" (optional) followed by spaces (optional) then numbers
+                    const match = groupName.match(/^(?:Group\s*)?(\d+)$/i);
+                    if (match) {
+                        const num = parseInt(match[1]);
+                        const padded = num < 10 ? '0' + num : num;
+                        return `G${padded}`;
+                    }
+                    
+                    // Case 2: Other text -> First 3 chars uppercase
+                    return groupName.substring(0, 3).toUpperCase();
+                };
+
                 // ---------------------------------------------------------
                 // 4. CORE PARSING LOGIC (WITH NULL CHECKS)
                 // ---------------------------------------------------------
@@ -677,12 +889,28 @@
                     lines.forEach(line => {
                         let l = line.trim().replace(new RegExp(',$'), '');
                         if (!l || l.startsWith('--') || l.startsWith('CONSTRAINT') || l.startsWith('KEY') || l.startsWith('PRIMARY KEY') || l.startsWith('INDEX') || l.startsWith('UNIQUE')) return;
+                        
                         const colMatch = l.match(/^"?([a-zA-Z0-9_]+)"?\s+([a-z0-9_]+(?:\s*\([^)]+\))?|[\w\[\]]+)(.*)$/i);
                         if (colMatch) {
                             const name = colMatch[1];
                             const type = colMatch[2];
-                            const rest = colMatch[3].toUpperCase();
-                            columns.push({ name: name, type: type, notNull: rest.includes('NOT NULL'), defaultVal: rest.includes('DEFAULT') ? rest.split('DEFAULT')[1].split(/\s+/)[1].replace(new RegExp("'", 'g'), '').replace(new RegExp(',$'), '') : null, unique: rest.includes('UNIQUE'), isPk: false, isFk: false });
+                            let rest = colMatch[3];
+
+                            // UPDATED: Remove 'COMMENT' clause before parsing attributes to avoid keyword conflict
+                            // Regex removes COMMENT '...' or COMMENT "..."
+                            rest = rest.replace(/COMMENT\s+'[^']*'/gi, '').replace(/COMMENT\s+"[^"]*"/gi, '');
+                            
+                            const restUpper = rest.toUpperCase();
+                            
+                            columns.push({ 
+                                name: name, 
+                                type: type, 
+                                notNull: restUpper.includes('NOT NULL'), 
+                                defaultVal: restUpper.includes('DEFAULT') ? restUpper.split('DEFAULT')[1].trim().split(/\s+/)[0].replace(new RegExp("'", 'g'), '').replace(new RegExp(',$'), '') : null, 
+                                unique: restUpper.includes('UNIQUE'), 
+                                isPk: false, 
+                                isFk: false 
+                            });
                         }
                     });
                     return columns;
@@ -708,7 +936,8 @@
                                 const checkFlag = (val) => { const v = (val||'').toLowerCase(); return v.includes('✓') || v === 'y' || v === 'yes' || v === 'true' || v === '1'; };
                                 const dynamicFlags = {};
                                 customFlagNames.value.forEach(flag => { dynamicFlags[flag] = checkFlag(row[flag]); });
-                                metadataMap[name] = { name, group: (row['Group name'] || 'Unknown').trim(), tier: (row['Tier'] || '?').trim(), flags: dynamicFlags, isFocus: true }; 
+                                // UPDATED: Prioritize 'Group' or 'group' column
+                                metadataMap[name] = { name, group: (row['Group'] || row['group'] || row['Group name'] || 'Unknown').trim(), tier: (row['Tier'] || '?').trim(), flags: dynamicFlags, isFocus: true }; 
                             }); 
                         } 
                         
@@ -764,7 +993,7 @@
                             } 
                         }); 
                         
-                        // Trigger Parsing
+                        // Trigger Parsing (Original Postgres Style)
                         const triggerRegex = /create\s+trigger\s+([a-z0-9_]+)\s+([\s\S]+?)\s+on\s+(?:[a-z0-9_]+\.)?([a-z0-9_]+)[\s\S]*?execute\s+(?:function|procedure)\s+(?:[a-z0-9_]+\.)?([a-z0-9_]+)\(([\s\S]*?)\)/gi;
                         let tm;
                         while ((tm = triggerRegex.exec(cleanDDL)) !== null) {
@@ -777,6 +1006,26 @@
                            const matchingTableKey = Object.keys(meta).find(k => k.toLowerCase() === tTable.toLowerCase());
                            if (matchingTableKey) {
                                meta[matchingTableKey].triggers.push({ name: tName, event: tEventRaw, func: tFunc, args: tArgs });
+                           }
+                        }
+
+                        // UPDATED: Trigger Parsing (MySQL/Generic Body Style)
+                        // CREATE TRIGGER `name` BEFORE/AFTER INSERT/UPDATE ON `table` FOR EACH ROW body...
+                        const triggerBodyRegex = /create\s+trigger\s+['"`]?([a-z0-9_]+)['"`]?\s+(.+?)\s+on\s+['"`]?(?:[a-z0-9_]+\.)?([a-z0-9_]+)['"`]?\s+for\s+each\s+row\s+([\s\S]+?)(?:\/\/|;)/gi;
+                        let tbm;
+                        while ((tbm = triggerBodyRegex.exec(cleanDDL)) !== null) {
+                           const tName = tbm[1];
+                           const tEventRaw = tbm[2].replace(/\s+/g, ' ').trim().toUpperCase();
+                           const tTable = tbm[3];
+                           const tBody = tbm[4].trim();
+                           
+                           // Check if already parsed by first regex to avoid duplicates
+                           const matchingTableKey = Object.keys(meta).find(k => k.toLowerCase() === tTable.toLowerCase());
+                           if (matchingTableKey) {
+                               const existing = meta[matchingTableKey].triggers.find(tr => tr.name === tName);
+                               if (!existing) {
+                                   meta[matchingTableKey].triggers.push({ name: tName, event: tEventRaw, body: tBody });
+                               }
                            }
                         }
 
@@ -857,7 +1106,21 @@
                 
                 watch(() => [filters.focusOnly, filters.dynamicFlags.size, filters.levels.size, filters.leafOnly], () => recalculateAllStats());
 
-                const filteredTables = computed(() => { let r = tables.value; if(searchQuery.value) { const q = searchQuery.value.toLowerCase(); r = r.filter(t => t.name.toLowerCase().includes(q) || t.group.toLowerCase().includes(q)); } r = r.filter(t => isVisible(t.name)); if (sortBy.value === 'name') r.sort((a,b) => a.name.localeCompare(b.name)); else if (sortBy.value === 'level_asc') r.sort((a,b) => a.depth - b.depth || a.name.localeCompare(b.name)); else if (sortBy.value === 'level_desc') r.sort((a,b) => b.depth - a.depth || a.name.localeCompare(b.name)); return r; });
+                const filteredTables = computed(() => { 
+                    let r = tables.value; 
+                    if(searchQuery.value) { 
+                        const q = searchQuery.value.toLowerCase(); 
+                        r = r.filter(t => t.name.toLowerCase().includes(q) || t.group.toLowerCase().includes(q)); 
+                    } 
+                    r = r.filter(t => isVisible(t.name)); 
+                    
+                    // UPDATED: Sort Logic
+                    if (sortBy.value === 'name') r.sort((a,b) => a.name.localeCompare(b.name)); 
+                    else if (sortBy.value === 'group') r.sort((a,b) => (a.group||'').localeCompare(b.group||'') || a.name.localeCompare(b.name)); // Sort by Group
+                    else if (sortBy.value === 'level_asc') r.sort((a,b) => a.depth - b.depth || a.name.localeCompare(b.name)); 
+                    else if (sortBy.value === 'level_desc') r.sort((a,b) => b.depth - a.depth || a.name.localeCompare(b.name)); 
+                    return r; 
+                });
                 const getDynamicChildCount = (n) => (relationships.value[n]||[]).filter(c=>isVisible(c)).length;
                 const getDynamicDescendantCount = (n) => dynamicDescendantCache.value[n]||0;
                 const getTierClass = (t) => t=='1'?'bg-red-50 text-red-600 border-red-200':(t=='2'?'bg-orange-50 text-orange-600 border-orange-200':(t=='3'?'bg-slate-50 text-slate-600 border-slate-200':'bg-white text-slate-400 border-slate-100'));
@@ -911,14 +1174,15 @@
                     document.body.removeChild(link); 
                 };
 
-                const openImpactModal = () => { showImpactModal.value = true; impactSearchCol.value = ''; impactResults.value = null; totalImpactCount.value = 0; };
+                const openImpactModal = () => { showImpactModal.value = true; impactSearchCol.value = ''; impactResults.value = null; totalImpactCount.value = 0; impactActiveFlags.clear(); impactFocusOnly.value = false; }; // UPDATED Reset all filters
                 const openERModal = () => { showERDialog.value = true; nextTick(() => { const nodes = filteredTables.value.map(t => ({ data: { id: t.name, label: t.name, depth: t.depth } })); const edges = []; filteredTables.value.forEach(t => { const m = sqlMetadata.value[t.name]; if (m && m.parents) m.parents.forEach(p => { if (nodes.some(n => n.data.id === p.name)) edges.push({ data: { source: t.name, target: p.name, label: p.fk } }); }); }); cy = cytoscape({ container: document.getElementById('cy'), elements: [...nodes, ...edges], style: [{ selector: 'node', style: { 'shape': 'round-rectangle', 'background-color': '#fff', 'border-color': '#64748b', 'label': 'data(label)', 'width': 'label', 'height': 'label', 'padding': '10px' } }, { selector: 'edge', style: { 'width': 1.5, 'line-color': '#94a3b8', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' } }], layout: { name: 'concentric', concentric: function(n){ return 100 - n.data('depth'); }, minNodeSpacing: 80, avoidOverlap: true } }); cy.on('render', drawBackground); }); };
 
                 const generateQuery = () => {
                     const startTable = selectedTable.value.name; generatedSql.value = '';
                     if (startTable === 'application') { generatedSql.value = `SELECT * \nFROM ngl.application \nWHERE id = '<YOUR_APPLICATION_ID>';`; return; }
                     const meta = sqlMetadata.value[startTable];
-                    if (meta && meta.hasAppIdCol) { generatedSql.value = `SELECT * \nFROM ngl.${startTable} \nWHERE application_id = '<YOUR_APPLICATION_ID>';`; return; }
+                    // UPDATED: Removed ngl. prefix for application_id logic
+                    if (meta && meta.hasAppIdCol) { generatedSql.value = `SELECT * \nFROM ${startTable} \nWHERE application_id = '<YOUR_APPLICATION_ID>';`; return; }
                     let foundPath = null; const queue = [{ table: startTable, path: [] }]; const visited = new Set();
                     while (queue.length > 0) {
                         const { table, path } = queue.shift(); if (visited.has(table)) continue; visited.add(table);
@@ -927,9 +1191,13 @@
                         if (table === 'application') { foundPath = { table, path, type: 'table' }; break; }
                         if (m.parents) { for (const parent of m.parents) { if (!visited.has(parent.name)) queue.push({ table: parent.name, path: [...path, { from: table, to: parent.name, fk: parent.fk, ref: parent.ref }] }); } }
                     }
-                    if (!foundPath) { generatedSql.value = `/* No direct link to Application ID found. */\nSELECT * \nFROM ngl.${startTable} \nLIMIT 10;`; return; }
-                    let sql = `SELECT t0.* \nFROM ngl.${startTable} t0`;
-                    foundPath.path.forEach((edge, index) => { const aliasTo = `t${index+1}`; const refCol = edge.ref || 'id'; sql += `\nJOIN ngl.${edge.to} ${aliasTo} ON t${index}.${edge.fk} = ${aliasTo}.${refCol}`; });
+                    if (!foundPath) { 
+                        // UPDATED: Removed ngl. prefix
+                        generatedSql.value = `/* No direct link to Application ID found. */\nSELECT * \nFROM ${startTable} \nLIMIT 10;`; return; 
+                    }
+                    // UPDATED: Removed ngl. prefix for JOIN logic
+                    let sql = `SELECT t0.* \nFROM ${startTable} t0`;
+                    foundPath.path.forEach((edge, index) => { const aliasTo = `t${index+1}`; const refCol = edge.ref || 'id'; sql += `\nJOIN ${edge.to} ${aliasTo} ON t${index}.${edge.fk} = ${aliasTo}.${refCol}`; });
                     const lastAlias = `t${foundPath.path.length}`;
                     if (foundPath.type === 'col') { sql += `\nWHERE ${lastAlias}.application_id = '<YOUR_APPLICATION_ID>';`; } else { sql += `\nWHERE ${lastAlias}.id = '<YOUR_APPLICATION_ID>';`; }
                     generatedSql.value = sql;
@@ -938,9 +1206,13 @@
                 const openSqlModal = () => { if(!selectedTable.value) return; generateQuery(); showSqlDialog.value = true; nextTick(() => hljs.highlightAll()); };
 
                 // ... Other Generators ...
-                const generateMockSQLRecursive = (tableName, visited = new Set()) => { if (visited.has(tableName)) return `-- [Recursion detected: ${tableName}]`; visited.add(tableName); let sql = ''; const meta = sqlMetadata.value[tableName]; const parents = meta?.parents || []; parents.forEach(p => { sql += generateMockSQLRecursive(p.name, new Set(visited)) + '\n'; }); const cols = extractColumnDetails(meta?.rawDDL); const requiredCols = cols.filter(c => c.isPk || c.notNull || c.isFk); if (!requiredCols.length) return sql + `-- No columns parsed for ${tableName}\n`; const colNames = requiredCols.map(c => c.name).join(', '); const values = requiredCols.map(c => generateRandomValue(c)).join(', '); sql += `INSERT INTO ngl.${tableName} (${colNames}) VALUES (${values});\n`; return sql; };
+                const generateMockSQLRecursive = (tableName, visited = new Set()) => { if (visited.has(tableName)) return `-- [Recursion detected: ${tableName}]`; visited.add(tableName); let sql = ''; const meta = sqlMetadata.value[tableName]; const parents = meta?.parents || []; parents.forEach(p => { sql += generateMockSQLRecursive(p.name, new Set(visited)) + '\n'; }); const cols = extractColumnDetails(meta?.rawDDL); const requiredCols = cols.filter(c => c.isPk || c.notNull || c.isFk); if (!requiredCols.length) return sql + `-- No columns parsed for ${tableName}\n`; const colNames = requiredCols.map(c => c.name).join(', '); const values = requiredCols.map(c => generateRandomValue(c)).join(', '); 
+                // UPDATED: Removed ngl. schema prefix
+                sql += `INSERT INTO ${tableName} (${colNames}) VALUES (${values});\n`; return sql; };
                 const generateRandomValue = (col) => { const t = col.type.toLowerCase(); if (t.includes('uuid')) return `'${faker.random.uuid()}'`; if (t.includes('int') || t.includes('serial')) return faker.random.number({min: 1, max: 1000}); if (t.includes('numeric') || t.includes('decimal')) return faker.finance.amount(); if (t.includes('char') || t.includes('text')) return `'${faker.lorem.word()}'`; if (t.includes('date')) return `'${faker.date.past().toISOString().split('T')[0]}'`; if (t.includes('time')) return `'${faker.date.recent().toISOString()}'`; if (t.includes('bool')) return faker.random.boolean(); return "'mock'"; };
                 const generateMockData = () => { if (!selectedTable.value) return; mockDataSql.value = generateMockSQLRecursive(selectedTable.value.name); };
+                const toggleImpactFlag = (flag) => { if(impactActiveFlags.has(flag)) impactActiveFlags.delete(flag); else impactActiveFlags.add(flag); };
+                const clearImpactFilters = () => { impactActiveFlags.clear(); impactFocusOnly.value = false; };
 
                 const getCompactSchema = () => {
                     return tables.value.map(t => {
@@ -973,7 +1245,12 @@
                     if (!userQueryPrompt.value) return;
                     let prompt = "";
                     const targetDB = dbDialect.value === 'postgres' ? 'PostgreSQL' : 'Azure Databricks (Spark SQL)';
-                    const dbSpecificRules = dbDialect.value === 'postgres' ? "5. Use 'ngl.' prefix for all tables." : "5. Use 'ngl.' prefix. Use Spark SQL syntax.";
+                    
+                    // UPDATED: Removed ngl prefix constraint
+                    const dbSpecificRules = dbDialect.value === 'postgres' 
+                        ? "5. Do not use schema prefix (e.g. 'ngl.') unless explicitly requested." 
+                        : "5. Do not use schema prefix. Use Spark SQL syntax.";
+                    
                     const allTableNames = tables.value.map(t => t.name).join(", ");
                     if (selectedTable.value) {
                          const tableName = selectedTable.value.name;
@@ -1040,17 +1317,23 @@
 
                     const buildNode = (tName, visited = new Set()) => {
                         if (visited.has(tName)) {
-                            return { name: tName + ' ⚠️ (Cycle)', children: [] };
+                            // UPDATED: Store realName separately to allow correct clicking
+                            return { name: tName + ' ⚠️ (Cycle)', realName: tName, children: [] };
                         }
                         visited.add(tName);
                         
                         const allChildren = relationships.value[tName] || [];
                         const validChildren = allChildren.filter(c => matches.has(c));
                         
+                        const t = tables.value.find(tbl => tbl.name === tName); // Get table info
+
                         return {
                             name: tName,
+                            realName: tName, // Store clean name
                             children: validChildren.map(child => buildNode(child, new Set(visited))),
-                            flags: tables.value.find(t => t.name === tName)?.flags 
+                            flags: t?.flags, 
+                            isFocus: t?.isFocus,
+                            group: t?.group // UPDATED: Added group info
                         };
                     };
 
@@ -1058,7 +1341,10 @@
                 };
 
                 const copyImpactList = () => {
-                    if(!impactResults.value) return;
+                    // UPDATED: Use filteredImpactResults instead of impactResults
+                    const source = filteredImpactResults.value;
+                    if(!source) return;
+                    
                     const list = [];
                     const traverse = (nodes) => {
                         nodes.forEach(n => {
@@ -1066,7 +1352,7 @@
                             if(n.children) traverse(n.children);
                         });
                     };
-                    traverse(impactResults.value);
+                    traverse(source);
                     copyText([...new Set(list)].join('\n'));
                 };
 
@@ -1079,17 +1365,17 @@
                 const useAppInfo = () => {
                     const showVersionModal = ref(false);
                     const moduleVersions = reactive({
-                        'App Core': 'v1.09.2',
-                        'Upload': 'v1.4.1 (Safe Replace Fix)',
+                        'App Core': 'v1.12.6', // UPDATED
+                        'Upload': 'v1.5.1', // UPDATED: Removed description
                         'AI Global': 'v2.2',
-                        'AI Text-to-SQL': 'v1.2',
+                        'AI Text-to-SQL': 'v1.3 (Removed Prefix Constraint)', 
                         'Child tree-view (Hierarchy)': 'v1.0',
-                        'Impact Analyst': 'v1.3 (Restored & Fixed)',
-                        'Data dict': 'v1.6 (Row Number Added)',
-                        'Mock data': 'v1.0',
-                        'SQL for application_id': 'v1.0',
+                        'Impact Analyst': 'v1.9 (Fix formatGroupBadge function)', 
+                        'Data dict': 'v1.8 (Enhanced Trigger Parsing)', 
+                        'Mock data': 'v1.1 (Removed schema prefix)', 
+                        'SQL for application_id': 'v1.1', // UPDATED: v1.1
                         'Filter': 'v1.2',
-                        'Table list view': 'v1.2',
+                        'Table list view': 'v1.4.0 (Group G01 Badge)', 
                         'ER Diagram': 'v1.0'
                     });
                     return { showVersionModal, moduleVersions };
@@ -1112,14 +1398,14 @@
                     userChatInput, chatMessages, 
                     aiMode,
                     showDataDictModal, parsedColumns, 
-                    showImpactModal, impactSearchCol, impactResults, 
+                    showImpactModal, impactSearchCol, impactResults, filteredImpactResults, impactActiveFlags, impactFocusOnly, filteredImpactCount, // EXPORTED
                     showMockModal, mockDataSql,
                     impactSearchMode, totalImpactCount,
                     activeTriggers,
                     isProcessing,
                     customFlagNames, 
                     // App Info
-                    showVersionModal, moduleVersions: appInfo.moduleVersions,
+                    showVersionModal: appInfo.showVersionModal, moduleVersions: appInfo.moduleVersions,
                     
                     // Functions
                     handleDDLUpload, handleCSVUpload, processFiles, startProcess, reset,
@@ -1131,8 +1417,10 @@
                     openAiModal, openGlobalAiModal, saveApiKey, generateInsight, generateSqlFromText, copyAiSql,
                     sendChatMessage, renderMarkdown,
                     openDataDictModal, exportDataDictCSV,
-                    openImpactModal, analyzeImpact, copyImpactList, selectByNameAndClose,
-                    openMockModal, generateMockData, copyText
+                    openImpactModal, analyzeImpact, copyImpactList, selectByNameAndClose, toggleImpactFlag, clearImpactFilters, // EXPORTED
+                    openMockModal, generateMockData, copyText,
+                    // NEW Export
+                    downloadExampleDDL, downloadExampleCSV, formatGroupBadge
                 };
             }
         }).mount('#app');
