@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Schema Analyzer AI Powered v1.13.4</title>
+    <title>Schema Analyzer AI Powered v1.14.1</title>
     
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -16,9 +16,7 @@
     <!-- Global Error Handler -->
     <script>
         window.onerror = function (msg, url, lineNo, columnNo, error) {
-            // Ignore ResizeObserver loop limit exceeded
             if (msg.includes('ResizeObserver')) return false;
-            
             const container = document.createElement('div');
             container.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ef4444;color:white;padding:16px;z-index:99999;font-family:monospace;font-size:14px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);border-bottom: 2px solid #b91c1c;';
             container.innerHTML = `<strong>🔥 System Error Detected:</strong><br>${msg}<br><span style="opacity:0.8;font-size:12px;">Line: ${lineNo} | Column: ${columnNo}</span>`;
@@ -108,7 +106,7 @@
             <div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full text-center relative">
                 <i class="ph ph-database text-6xl text-blue-500 mb-4"></i>
                 <h1 class="text-2xl font-bold text-slate-800 mb-2">Schema Analyzer AI Powered</h1>
-                <p class="text-slate-500 mb-8">Version 1.13.4</p>
+                <p class="text-slate-500 mb-8">Version 1.14.1</p>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="border-2 border-dashed rounded-lg p-6 transition-colors relative cursor-pointer group"
@@ -152,7 +150,7 @@
 
                 <!-- Version Button -->
                 <button @click="showVersionModal = true" class="absolute bottom-4 right-4 text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
-                    <i class="ph ph-info"></i> v1.13.4
+                    <i class="ph ph-info"></i> v1.14.1
                 </button>
             </div>
         </div>
@@ -722,9 +720,9 @@
                 // Version Info (Fixed: Defined once inside setup)
                 const showVersionModal = ref(false);
                 const moduleVersions = reactive({
-                    'App Core': 'v1.13.4', // UPDATED
+                    'App Core': 'v1.13.3', // UPDATED (Hotfix)
                     'Upload': 'v1.5.1', 
-                    'AI Global': 'v2.5 (Auto-scroll & Trigger Context)', // UPDATED
+                    'AI Global': 'v2.4 (Fix History Save)', 
                     'AI Text-to-SQL': 'v1.3', 
                     'Child tree-view (Hierarchy)': 'v1.0',
                     'Impact Analyst': 'v1.10', 
@@ -911,6 +909,7 @@ CREATE TABLE order_items (
                 };
 
                 const downloadExampleCSV = () => {
+                    // UPDATED: Changed example headers
                     const content = `Table name,Group,Tier,important,is_transaction
 users,Group 1,1,Y,
 orders,Group 1,2,Y,Y
@@ -1448,8 +1447,6 @@ order_items,Group 2,3,,Y`;
                     if(found) selectedTable.value = found;
                     showImpactModal.value = false;
                 };
-
-                // UPDATED v1.13.2: Removed Duplicate showVersionModal Declaration
 
                 return {
                     // State
