@@ -735,11 +735,11 @@
                 // VERSIONING STRATEGY
                 // ---------------------------------------------------------
                 const moduleVersions = reactive({
-                    'App Core': 'v1.14.4',  // Bumped for New Example Data
-                    'AI Global': 'v2.6',    
+                    'App Core': 'v1.14.5',  // Version Bump
+                    'AI Global': 'v2.7',    // AI Trigger Context
                     'Impact Analyst': 'v1.11', 
                     'SQL for application_id': 'v1.2',
-                    'Upload': 'v1.5.2', // Updated for new Example
+                    'Upload': 'v1.5.2', 
                     'AI Text-to-SQL': 'v1.4', 
                     'Child tree-view (Hierarchy)': 'v1.0',
                     'Data dict': 'v1.8',
@@ -1447,7 +1447,14 @@ inventory_logs,System,3,,,Y`;
                             return str;
                         }).join(', ');
                         const parentStr = meta.parents.map(p => `${p.fk}->${p.name}`).join(', ');
-                        return `Table: ${t.name}\nCols: ${colStr}\nRefs: ${parentStr || 'None'}`;
+                        
+                        // NEW: Added Triggers to Context
+                        const triggers = meta.triggers || [];
+                        const triggerStr = triggers.length > 0 
+                            ? triggers.map(tr => `${tr.name}(${tr.event})`).join(', ') 
+                            : 'None';
+
+                        return `Table: ${t.name}\nCols: ${colStr}\nRefs: ${parentStr || 'None'}\nTriggers: ${triggerStr}`;
                     }).join('\n\n');
                 };
 
@@ -1473,7 +1480,7 @@ inventory_logs,System,3,,,Y`;
                     });
 
                     const schemaContext = getCompactSchema();
-                    const prompt = `You are a Senior Database Architect.\n\nINSTRUCTIONS:\n1. You have the FULL database schema below (Compressed Format).\n2. Use this GLOBAL knowledge to answer questions about relationships, data types, and cross-table impacts.\n3. Do not Hallucinate. Use ONLY the provided schema.\n4. If the answer is not in the schema, say so.\n5. IMPORTANT: Respond ONLY in Thai or English, depending on the user's question language. Do not use other languages like Korean or Vietnamese.\n\nGLOBAL SCHEMA CONTEXT:\n${schemaContext}\n\nUser Question: "${userMsg}"\n\nAnswer (Professional, Markdown, Thai/English ONLY):`;
+                    const prompt = `You are a Senior Database Architect.\n\nINSTRUCTIONS:\n1. You have the FULL database schema below (Compressed Format).\n2. Use this GLOBAL knowledge to answer questions about relationships, data types, triggers, and cross-table impacts.\n3. Do not Hallucinate. Use ONLY the provided schema.\n4. If the answer is not in the schema, say so.\n5. IMPORTANT: Respond ONLY in Thai or English, depending on the user's question language. Do not use other languages like Korean or Vietnamese.\n\nGLOBAL SCHEMA CONTEXT:\n${schemaContext}\n\nUser Question: "${userMsg}"\n\nAnswer (Professional, Markdown, Thai/English ONLY):`;
                     const response = await callGemini(prompt);
                     chatMessages.value.push({ role: 'ai', text: response || "Sorry, I couldn't process that." });
                     
