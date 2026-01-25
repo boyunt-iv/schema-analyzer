@@ -735,8 +735,8 @@
                 // VERSIONING STRATEGY
                 // ---------------------------------------------------------
                 const moduleVersions = reactive({
-                    'App Core': 'v1.14.5',  // Version Bump
-                    'AI Global': 'v2.7',    // AI Trigger Context
+                    'App Core': 'v1.14.6',  // Version Bump
+                    'AI Global': 'v2.8',    // Fixed Chat History
                     'Impact Analyst': 'v1.11', 
                     'SQL for application_id': 'v1.2',
                     'Upload': 'v1.5.2', 
@@ -1473,7 +1473,8 @@ inventory_logs,System,3,,,Y`;
                     const userMsg = userChatInput.value;
                     chatMessages.value.push({ role: 'user', text: userMsg });
                     userChatInput.value = '';
-                    
+                    saveChatHistory(); // Added: Save User msg
+
                     nextTick(() => {
                         scrollToBottom();
                         if(chatInput.value) chatInput.value.focus();
@@ -1483,6 +1484,7 @@ inventory_logs,System,3,,,Y`;
                     const prompt = `You are a Senior Database Architect.\n\nINSTRUCTIONS:\n1. You have the FULL database schema below (Compressed Format).\n2. Use this GLOBAL knowledge to answer questions about relationships, data types, triggers, and cross-table impacts.\n3. Do not Hallucinate. Use ONLY the provided schema.\n4. If the answer is not in the schema, say so.\n5. IMPORTANT: Respond ONLY in Thai or English, depending on the user's question language. Do not use other languages like Korean or Vietnamese.\n\nGLOBAL SCHEMA CONTEXT:\n${schemaContext}\n\nUser Question: "${userMsg}"\n\nAnswer (Professional, Markdown, Thai/English ONLY):`;
                     const response = await callGemini(prompt);
                     chatMessages.value.push({ role: 'ai', text: response || "Sorry, I couldn't process that." });
+                    saveChatHistory(); // Added: Save AI msg
                     
                     nextTick(() => scrollToBottom());
                 };
