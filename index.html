@@ -566,50 +566,49 @@
                 </div>
             </div>
 
-            <!-- Tab: Text-to-SQL (Updated) -->
+            <!-- Tab: Text-to-SQL (Updated UI) -->
             <div v-if="activeAiTab === 'query'">
                 <div class="flex flex-col h-full">
-                    <div class="flex items-center gap-4 mb-3 flex-wrap">
-                         <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" v-model="dbDialect" value="postgres" class="text-purple-600 focus:ring-purple-500">
-                            <span class="text-sm text-slate-700 font-medium">PostgreSQL</span>
-                        </label>
-                        <!-- ADDED: MySQL Option -->
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" v-model="dbDialect" value="mysql" class="text-purple-600 focus:ring-purple-500">
-                            <span class="text-sm text-slate-700 font-medium">MySQL</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" v-model="dbDialect" value="databricks" class="text-purple-600 focus:ring-purple-500">
-                            <span class="text-sm text-slate-700 font-medium">Azure Databricks</span>
-                        </label>
-                        <!-- ADDED: Oracle Option -->
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" v-model="dbDialect" value="oracle" class="text-purple-600 focus:ring-purple-500">
-                            <span class="text-sm text-slate-700 font-medium">Oracle</span>
-                        </label>
-                        <!-- ADDED: SQL Server Option -->
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" v-model="dbDialect" value="sqlserver" class="text-purple-600 focus:ring-purple-500">
-                            <span class="text-sm text-slate-700 font-medium">SQL Server</span>
-                        </label>
-                    </div>
+                    <!-- REMOVED: Top Radio Buttons -->
+                    
                     <div class="mb-4 relative">
-                        <textarea v-model="userQueryPrompt" class="w-full border border-slate-300 rounded-lg p-3 text-sm h-24 resize-none focus:ring-2 focus:ring-purple-200 outline-none" placeholder="Describe the query you need (e.g. Find top 10 customers by loan amount)..."></textarea>
-                        <button @click="generateSqlFromText" :disabled="isLoading || !userQueryPrompt" 
-                                class="absolute bottom-2 right-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-md text-xs font-bold shadow transition-colors flex items-center gap-2 disabled:bg-slate-400 disabled:cursor-not-allowed">
-                            <i v-if="isLoading" class="ph ph-spinner animate-spin"></i>
-                            {{ isLoading ? 'Generating SQL...' : 'Generate SQL' }}
-                        </button>
+                        <!-- Added bottom padding for controls area -->
+                        <textarea v-model="userQueryPrompt" class="w-full border border-slate-300 rounded-lg p-3 pb-14 text-sm h-40 resize-none focus:ring-2 focus:ring-purple-200 outline-none custom-scrollbar" placeholder="Describe the query you need (e.g. Find top 10 customers by loan amount)..."></textarea>
+                        
+                        <!-- NEW: Bottom Toolbar Container -->
+                        <div class="absolute bottom-3 right-3 flex items-center gap-2 bg-white/80 backdrop-blur-sm p-1.5 rounded-lg border border-slate-100 shadow-sm">
+                            <!-- Dropdown for Database Selection -->
+                            <div class="relative">
+                                <select v-model="dbDialect" class="appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-md py-1.5 pl-3 pr-8 focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium cursor-pointer hover:bg-slate-100 transition-colors">
+                                    <option value="postgres">PostgreSQL</option>
+                                    <option value="mysql">MySQL</option>
+                                    <option value="sqlserver">SQL Server</option>
+                                    <option value="databricks">Azure Databricks</option>
+                                    <option disabled>──────────</option>
+                                    <option value="oracle11g">Oracle 11g</option>
+                                    <option value="oracle12c">Oracle 12c/19c</option>
+                                    <option value="oracle23c">Oracle 21c/23c</option>
+                                </select>
+                                <i class="ph ph-caret-down absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                            </div>
+
+                            <!-- Generate Button -->
+                            <button @click="generateSqlFromText" :disabled="isLoading || !userQueryPrompt" 
+                                    class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1.5 rounded-md text-xs font-bold shadow transition-colors flex items-center gap-2 disabled:bg-slate-400 disabled:cursor-not-allowed">
+                                <i v-if="isLoading" class="ph ph-spinner animate-spin"></i>
+                                {{ isLoading ? 'Generating...' : 'Generate SQL' }}
+                            </button>
+                        </div>
                     </div>
+                    
                     <div v-if="aiSqlResponse" class="flex-1 overflow-hidden flex flex-col">
                         <div class="relative flex-1 group">
                             <pre class="rounded-lg overflow-y-auto border border-slate-200 bg-slate-50 h-full p-4 custom-scrollbar shadow-inner"><code class="language-sql text-sm code-font" v-html="aiSqlResponse"></code></pre>
                             <button @click="copyAiSql" class="absolute top-2 right-2 bg-white/90 p-2 rounded shadow hover:text-purple-600"><i class="ph ph-copy"></i></button>
                         </div>
                         
-                        <!-- NEW: Sample Result Section -->
-                        <div v-if="aiSampleResult" class="mt-4 border-t border-slate-200 pt-4 flex-1 overflow-hidden flex flex-col">
+                        <!-- Sample Result Section -->
+                        <div v-if="aiSampleResult" class="mt-4 border-t border-slate-200 pt-4 flex-1 overflow-hidden flex flex-col max-h-[40%]">
                             <h4 class="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
                                 <i class="ph ph-table text-purple-600"></i> Sample Result (AI Generated)
                             </h4>
@@ -760,12 +759,12 @@
                 // VERSIONING STRATEGY
                 // ---------------------------------------------------------
                 const moduleVersions = reactive({
-                    'App Core': 'v1.14.9',  // Version Bump for Sample Result UI
+                    'App Core': 'v1.14.10',  // Version Bump for Dropdown UI
                     'AI Global': 'v2.8',    
                     'Impact Analyst': 'v1.11', 
                     'SQL for application_id': 'v1.2',
                     'Upload': 'v1.5.2', 
-                    'AI Text-to-SQL': 'v1.6', // Bump for Sample Result Logic
+                    'AI Text-to-SQL': 'v1.7', // Bump for Oracle Logic
                     'Child tree-view (Hierarchy)': 'v1.0',
                     'Data dict': 'v1.8',
                     'Mock data': 'v1.2', 
@@ -1525,15 +1524,22 @@ inventory_logs,System,3,,,Y`;
                     let targetDB = 'PostgreSQL';
                     let dbSpecificRules = "5. Do not use schema prefix (e.g. 'ngl.') unless explicitly requested.";
 
+                    // UPDATED: Logic for Oracle Versions
                     if (dbDialect.value === 'mysql') {
                         targetDB = 'MySQL';
                         dbSpecificRules = "5. Use MySQL syntax (e.g. backticks ` for identifiers if needed). Do not use schema prefix.";
                     } else if (dbDialect.value === 'databricks') {
                         targetDB = 'Azure Databricks (Spark SQL)';
                         dbSpecificRules = "5. Do not use schema prefix. Use Spark SQL syntax.";
-                    } else if (dbDialect.value === 'oracle') {
-                        targetDB = 'Oracle Database';
-                        dbSpecificRules = "5. Use Oracle syntax (e.g., `FETCH FIRST N ROWS ONLY` for limits, `SYSDATE`). Avoid backticks. Use quotes for case-sensitive identifiers if needed.";
+                    } else if (dbDialect.value === 'oracle11g') {
+                         targetDB = 'Oracle Database 11g (Legacy)';
+                        dbSpecificRules = "5. CRITICAL: Use Oracle 11g legacy syntax. Use `WHERE ROWNUM <= N` for limits. DO NOT USE `FETCH FIRST`. Use `SYSDATE`. Avoid backticks.";
+                    } else if (dbDialect.value === 'oracle12c') {
+                        targetDB = 'Oracle Database 12c/19c';
+                        dbSpecificRules = "5. Use Oracle 12c/19c syntax. Use `FETCH FIRST N ROWS ONLY` for limits. Use `SYSDATE`.";
+                    } else if (dbDialect.value === 'oracle23c') {
+                        targetDB = 'Oracle Database 21c/23c';
+                        dbSpecificRules = "5. Use modern Oracle 21c/23c syntax. Use `FETCH FIRST N ROWS ONLY`.";
                     } else if (dbDialect.value === 'sqlserver') {
                         targetDB = 'Microsoft SQL Server (T-SQL)';
                         dbSpecificRules = "5. Use T-SQL syntax (e.g., `TOP N`, `[Identifier]`). Use `GETDATE()`.";
