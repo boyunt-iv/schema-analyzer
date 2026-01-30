@@ -89,6 +89,9 @@
         .markdown-body li { margin-bottom: 0.25em; }
         .markdown-body strong { color: #0f172a; font-weight: 600; }
         .markdown-body code { background-color: #f1f5f9; padding: 2px 4px; rounded: 4px; font-family: 'Fira Code', monospace; font-size: 0.8em; color: #db2777; }
+        .markdown-body table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .markdown-body th, .markdown-body td { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
+        .markdown-body th { background-color: #f8fafc; font-weight: 600; color: #475569; }
         
         .tab-btn.active { border-bottom-color: #7c3aed; color: #7c3aed; background-color: white; }
     </style>
@@ -604,6 +607,14 @@
                             <pre class="rounded-lg overflow-y-auto border border-slate-200 bg-slate-50 h-full p-4 custom-scrollbar shadow-inner"><code class="language-sql text-sm code-font" v-html="aiSqlResponse"></code></pre>
                             <button @click="copyAiSql" class="absolute top-2 right-2 bg-white/90 p-2 rounded shadow hover:text-purple-600"><i class="ph ph-copy"></i></button>
                         </div>
+                        
+                        <!-- NEW: Sample Result Section -->
+                        <div v-if="aiSampleResult" class="mt-4 border-t border-slate-200 pt-4 flex-1 overflow-hidden flex flex-col">
+                            <h4 class="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                                <i class="ph ph-table text-purple-600"></i> Sample Result (AI Generated)
+                            </h4>
+                            <div class="markdown-body text-xs overflow-auto bg-slate-50 p-3 rounded border border-slate-200 flex-1 custom-scrollbar" v-html="renderMarkdown(aiSampleResult)"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -722,6 +733,7 @@
                 const aiResponse = ref('');
                 const userQueryPrompt = ref('');
                 const aiSqlResponse = ref('');
+                const aiSampleResult = ref(''); // NEW: For sample table
                 const copySuccess = ref(false);
                 const dbDialect = ref('postgres');
                 const userChatInput = ref(''); 
@@ -748,12 +760,12 @@
                 // VERSIONING STRATEGY
                 // ---------------------------------------------------------
                 const moduleVersions = reactive({
-                    'App Core': 'v1.14.8',  // Version Bump for Oracle/SQLServer
+                    'App Core': 'v1.14.9',  // Version Bump for Sample Result UI
                     'AI Global': 'v2.8',    
                     'Impact Analyst': 'v1.11', 
                     'SQL for application_id': 'v1.2',
                     'Upload': 'v1.5.2', 
-                    'AI Text-to-SQL': 'v1.5', // Bump for new dialects
+                    'AI Text-to-SQL': 'v1.6', // Bump for Sample Result Logic
                     'Child tree-view (Hierarchy)': 'v1.0',
                     'Data dict': 'v1.8',
                     'Mock data': 'v1.2', 
@@ -1504,6 +1516,10 @@ inventory_logs,System,3,,,Y`;
 
                 const generateSqlFromText = async () => {
                     if (!userQueryPrompt.value) return;
+                    // Clear previous results
+                    aiSqlResponse.value = '';
+                    aiSampleResult.value = '';
+
                     let prompt = "";
                     
                     let targetDB = 'PostgreSQL';
@@ -1523,11 +1539,13 @@ inventory_logs,System,3,,,Y`;
                         dbSpecificRules = "5. Use T-SQL syntax (e.g., `TOP N`, `[Identifier]`). Use `GETDATE()`.";
                     }
                     
+                    const commonInstructions = `\n6. After the code block, provide a '### Sample Result' section with a Markdown Table showing 3-5 rows of realistic mock data based on the query columns.`;
+
                     const allTableNames = tables.value.map(t => t.name).join(", ");
                     if (selectedTable.value) {
                          const tableName = selectedTable.value.name;
                          const tableDDL = sqlMetadata.value[tableName]?.rawDDL || "";
-                         prompt = `CRITICAL: You are a ${targetDB} Expert. Use ONLY the provided schema. Do not hallucinate columns.\n${dbSpecificRules}\n\nSchema for '${tableName}':\n\`\`\`sql\n${tableDDL}\n\`\`\`\n\nQuestion: "${userQueryPrompt.value}"\nAnswer (SQL Only):`;
+                         prompt = `CRITICAL: You are a ${targetDB} Expert. Use ONLY the provided schema. Do not hallucinate columns.\n${dbSpecificRules}${commonInstructions}\n\nSchema for '${tableName}':\n\`\`\`sql\n${tableDDL}\n\`\`\`\n\nQuestion: "${userQueryPrompt.value}"\nAnswer:\n1. SQL Code Block.\n2. '### Sample Result' with Markdown Table.`;
                     } else {
                          const queryKeywords = userQueryPrompt.value.toLowerCase().split(' ').filter(w => w.length > 3);
                          const scored = tables.value.map(t => {
@@ -1541,11 +1559,20 @@ inventory_logs,System,3,,,Y`;
                          const topTables = scored.slice(0, 15);
                          const relevantDDLs = topTables.map(t => t.ddl).join("\n\n");
                          aiContextTables.value = topTables.map(t => t.name).join(", ");
-                         prompt = `CRITICAL INSTRUCTIONS:\n1. You are a ${targetDB} Expert.\n2. USE ONLY tables from: [${allTableNames}].\n3. USE ONLY columns from provided schema.\n${dbSpecificRules}\n\nRELEVANT SCHEMAS:\n\`\`\`sql\n${relevantDDLs}\n\`\`\`\n\nQuestion: "${userQueryPrompt.value}"\nAnswer (SQL Code Block Only):`;
+                         prompt = `CRITICAL INSTRUCTIONS:\n1. You are a ${targetDB} Expert.\n2. USE ONLY tables from: [${allTableNames}].\n3. USE ONLY columns from provided schema.\n${dbSpecificRules}${commonInstructions}\n\nRELEVANT SCHEMAS:\n\`\`\`sql\n${relevantDDLs}\n\`\`\`\n\nQuestion: "${userQueryPrompt.value}"\nAnswer:\n1. SQL Code Block.\n2. '### Sample Result' with Markdown Table.`;
                     }
+                    
                     const text = await callGemini(prompt);
-                    const sqlMatch = text.match(new RegExp('```sql([\\s\\S]*?)```')) || text.match(new RegExp('```([\\s\\S]*?)```')); 
+                    
+                    // Parse SQL
+                    const sqlMatch = text.match(/```sql([\s\S]*?)```/) || text.match(/```([\s\S]*?)```/); 
                     aiSqlResponse.value = hljs.highlight(sqlMatch ? sqlMatch[1].trim() : text, {language: 'sql'}).value; 
+                    
+                    // Parse Sample Result
+                    const parts = text.split('### Sample Result');
+                    if (parts.length > 1) {
+                        aiSampleResult.value = parts[1].trim();
+                    }
                 };
 
                 const drawBackground = () => { if (!cy) return; const canvas = document.getElementById('bgCanvas'); if (!canvas) return; const ctx = canvas.getContext('2d'); canvas.width = canvas.parentElement.offsetWidth; canvas.height = canvas.parentElement.offsetHeight; const pan = cy.pan(); const zoom = cy.zoom(); ctx.translate(pan.x, pan.y); ctx.scale(zoom, zoom); let centerX = 0, centerY = 0, countL0 = 0; cy.nodes().forEach(n => { if(n.data('depth') === 0) { centerX += n.position().x; centerY += n.position().y; countL0++; } }); if (countL0 > 0) { centerX /= countL0; centerY /= countL0; } else { const bb = cy.elements().boundingBox(); centerX = (bb.x1 + bb.x2)/2; centerY = (bb.y1 + bb.y2)/2; } const maxDistPerLevel = {}; cy.nodes().forEach(n => { const d = n.data('depth'); const dist = Math.sqrt(Math.pow(n.position().x - centerX, 2) + Math.pow(n.position().y - centerY, 2)); if (!maxDistPerLevel[d] || dist + 80 > maxDistPerLevel[d]) maxDistPerLevel[d] = dist + 80; }); const colors = ['rgba(254, 226, 226, 0.5)', 'rgba(254, 249, 195, 0.5)', 'rgba(220, 252, 231, 0.5)', 'rgba(224, 242, 254, 0.5)']; Object.keys(maxDistPerLevel).map(Number).sort((a,b) => b - a).forEach(l => { ctx.beginPath(); ctx.arc(centerX, centerY, maxDistPerLevel[l], 0, 2 * Math.PI); ctx.fillStyle = colors[l] || 'rgba(241, 245, 249, 0.5)'; ctx.fill(); }); };
@@ -1643,6 +1670,7 @@ inventory_logs,System,3,,,Y`;
                     isLoading, aiResponse, 
                     // REMOVED parsedAiResponse to fix Error
                     userQueryPrompt, aiSqlResponse, 
+                    aiSampleResult, // EXPORTED
                     copySuccess, dbDialect, aiContextTables,
                     userChatInput, chatMessages, 
                     chatContainer, chatInput, // UPDATED v1.13.4
