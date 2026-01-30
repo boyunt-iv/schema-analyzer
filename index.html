@@ -580,6 +580,16 @@
                             <input type="radio" v-model="dbDialect" value="databricks" class="text-purple-600 focus:ring-purple-500">
                             <span class="text-sm text-slate-700 font-medium">Azure Databricks</span>
                         </label>
+                        <!-- ADDED: Oracle Option -->
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" v-model="dbDialect" value="oracle" class="text-purple-600 focus:ring-purple-500">
+                            <span class="text-sm text-slate-700 font-medium">Oracle</span>
+                        </label>
+                        <!-- ADDED: SQL Server Option -->
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" v-model="dbDialect" value="sqlserver" class="text-purple-600 focus:ring-purple-500">
+                            <span class="text-sm text-slate-700 font-medium">SQL Server</span>
+                        </label>
                     </div>
                     <div class="mb-4 relative">
                         <textarea v-model="userQueryPrompt" class="w-full border border-slate-300 rounded-lg p-3 text-sm h-24 resize-none focus:ring-2 focus:ring-purple-200 outline-none" placeholder="Describe the query you need (e.g. Find top 10 customers by loan amount)..."></textarea>
@@ -738,12 +748,12 @@
                 // VERSIONING STRATEGY
                 // ---------------------------------------------------------
                 const moduleVersions = reactive({
-                    'App Core': 'v1.14.7',  // Version Bump for Domain Lock
+                    'App Core': 'v1.14.8',  // Version Bump for Oracle/SQLServer
                     'AI Global': 'v2.8',    
                     'Impact Analyst': 'v1.11', 
                     'SQL for application_id': 'v1.2',
                     'Upload': 'v1.5.2', 
-                    'AI Text-to-SQL': 'v1.4', 
+                    'AI Text-to-SQL': 'v1.5', // Bump for new dialects
                     'Child tree-view (Hierarchy)': 'v1.0',
                     'Data dict': 'v1.8',
                     'Mock data': 'v1.2', 
@@ -1430,7 +1440,7 @@ inventory_logs,System,3,,,Y`;
                     if (t.includes('int') || t.includes('serial')) return Math.floor(Math.random() * 1000) + 1; 
                     if (t.includes('numeric') || t.includes('decimal')) return (Math.random() * 1000).toFixed(2); 
                     if (t.includes('char') || t.includes('text')) return `'SampleText${Math.floor(Math.random()*100)}'`; 
-                    if (t.includes('date')) return `'${new Date().toISOString().split('T')[0]}'`; 
+                    if (t.includes('date')) return `'${new Date().toISOString().split('T')[1].split('.')[0]}'`; 
                     if (t.includes('time')) return `'${new Date().toISOString().split('T')[1].split('.')[0]}'`; 
                     if (t.includes('bool')) return Math.random() > 0.5 ? 'TRUE' : 'FALSE'; 
                     return "'mock_val'"; 
@@ -1497,14 +1507,20 @@ inventory_logs,System,3,,,Y`;
                     let prompt = "";
                     
                     let targetDB = 'PostgreSQL';
-                    if (dbDialect.value === 'mysql') targetDB = 'MySQL';
-                    else if (dbDialect.value === 'databricks') targetDB = 'Azure Databricks (Spark SQL)';
-                    
                     let dbSpecificRules = "5. Do not use schema prefix (e.g. 'ngl.') unless explicitly requested.";
-                    if (dbDialect.value === 'databricks') {
-                        dbSpecificRules = "5. Do not use schema prefix. Use Spark SQL syntax.";
-                    } else if (dbDialect.value === 'mysql') {
+
+                    if (dbDialect.value === 'mysql') {
+                        targetDB = 'MySQL';
                         dbSpecificRules = "5. Use MySQL syntax (e.g. backticks ` for identifiers if needed). Do not use schema prefix.";
+                    } else if (dbDialect.value === 'databricks') {
+                        targetDB = 'Azure Databricks (Spark SQL)';
+                        dbSpecificRules = "5. Do not use schema prefix. Use Spark SQL syntax.";
+                    } else if (dbDialect.value === 'oracle') {
+                        targetDB = 'Oracle Database';
+                        dbSpecificRules = "5. Use Oracle syntax (e.g., `FETCH FIRST N ROWS ONLY` for limits, `SYSDATE`). Avoid backticks. Use quotes for case-sensitive identifiers if needed.";
+                    } else if (dbDialect.value === 'sqlserver') {
+                        targetDB = 'Microsoft SQL Server (T-SQL)';
+                        dbSpecificRules = "5. Use T-SQL syntax (e.g., `TOP N`, `[Identifier]`). Use `GETDATE()`.";
                     }
                     
                     const allTableNames = tables.value.map(t => t.name).join(", ");
