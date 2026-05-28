@@ -121,6 +121,12 @@
                         <p class="font-semibold text-slate-700">1. Upload DDL File <span class="text-red-500">*</span></p>
                         <p class="text-xs text-slate-400 mt-1" v-if="!ddlFileName">Required (e.g. DDL_sample.sql)</p>
                         <p class="text-xs text-blue-600 font-bold mt-1" v-else><i class="ph ph-check"></i> {{ ddlFileName }}</p>
+                        <button v-if="savedInputFiles.ddl && !ddlContent"
+                                @click.stop.prevent="useSavedInputFile('ddl')"
+                                class="absolute bottom-2 left-2 pointer-events-auto z-10 max-w-[55%] truncate text-[10px] text-blue-500 hover:text-blue-700 hover:underline"
+                                :title="'Use recent: ' + savedInputFiles.ddl.name">
+                            <i class="ph ph-clock-counter-clockwise"></i> {{ savedInputFiles.ddl.name }}
+                        </button>
                         <!-- Example Download -->
                         <div class="absolute bottom-2 right-2 pointer-events-auto z-10">
                             <button @click="downloadExampleDDL" class="text-[10px] text-blue-400 hover:text-blue-600 hover:underline">Download Example</button>
@@ -134,6 +140,12 @@
                         <p class="font-semibold text-slate-700">2. Upload Table Focus</p>
                         <p class="text-xs text-slate-400 mt-1" v-if="!csvFileName">Optional (CSV for filtering)</p>
                         <p class="text-xs text-green-600 font-bold mt-1" v-else><i class="ph ph-check"></i> {{ csvFileName }}</p>
+                        <button v-if="savedInputFiles.csv && !csvContent"
+                                @click.stop.prevent="useSavedInputFile('csv')"
+                                class="absolute bottom-2 left-2 pointer-events-auto z-10 max-w-[55%] truncate text-[10px] text-green-500 hover:text-green-700 hover:underline"
+                                :title="'Use recent: ' + savedInputFiles.csv.name">
+                            <i class="ph ph-clock-counter-clockwise"></i> {{ savedInputFiles.csv.name }}
+                        </button>
                         <!-- Example Download -->
                         <div class="absolute bottom-2 right-2 pointer-events-auto z-10">
                             <button @click="downloadExampleCSV" class="text-[10px] text-green-400 hover:text-green-600 hover:underline">Download Example</button>
@@ -715,6 +727,7 @@
                 const csvContent = ref(null);
                 const ddlFileName = ref('');
                 const csvFileName = ref('');
+                const savedInputFiles = ref({ ddl: null, csv: null });
                 const errorMsg = ref('');
                 
                 // Optimized: use shallowRef for large datasets
@@ -778,11 +791,11 @@
                 // VERSIONING STRATEGY
                 // ---------------------------------------------------------
                 const moduleVersions = reactive({
-                    'App Core': 'v1.14.11',  // Version Bump for ESC modal close
+                    'App Core': 'v1.14.12',  // Version Bump for saved local input files
                     'AI Global': 'v2.8',    
                     'Impact Analyst': 'v1.11', 
                     'SQL for application_id': 'v1.2',
-                    'Upload': 'v1.5.2', 
+                    'Upload': 'v1.6.0', 
                     'AI Text-to-SQL': 'v1.7', // Bump for Oracle Logic
                     'Child tree-view (Hierarchy)': 'v1.0',
                     'Data dict': 'v1.9',
@@ -894,6 +907,48 @@
                 if(localStorage.getItem('ngl_gemini_key')) userApiKey.value = localStorage.getItem('ngl_gemini_key');
 
                 const saveApiKey = () => { localStorage.setItem('ngl_gemini_key', userApiKey.value); showApiKeyInput.value = false; };
+
+                const getSavedInputKey = (kind) => `schema_analyzer_recent_${kind}_file_v1`;
+
+                const loadSavedInputFiles = () => {
+                    const nextSaved = { ddl: null, csv: null };
+                    ['ddl', 'csv'].forEach(kind => {
+                        const raw = localStorage.getItem(getSavedInputKey(kind));
+                        if (!raw) return;
+                        try {
+                            const parsed = JSON.parse(raw);
+                            if (parsed?.name && typeof parsed.content === 'string') nextSaved[kind] = parsed;
+                        } catch (e) {
+                            console.warn(`Failed to load recent ${kind} file`, e);
+                        }
+                    });
+                    savedInputFiles.value = nextSaved;
+                };
+
+                const saveInputFileLocally = (kind, name, content) => {
+                    const recentFile = { name, content, savedAt: new Date().toISOString() };
+                    try {
+                        localStorage.setItem(getSavedInputKey(kind), JSON.stringify(recentFile));
+                        savedInputFiles.value = { ...savedInputFiles.value, [kind]: recentFile };
+                    } catch (e) {
+                        console.warn(`Failed to save recent ${kind} file`, e);
+                        errorMsg.value = 'This browser could not save the recent file locally. You can still continue with the uploaded file.';
+                    }
+                };
+
+                const useSavedInputFile = (kind) => {
+                    const recentFile = savedInputFiles.value[kind];
+                    if (!recentFile) return;
+                    errorMsg.value = '';
+                    if (kind === 'ddl') {
+                        ddlFileName.value = recentFile.name;
+                        ddlContent.value = recentFile.content;
+                        loadChatHistory(recentFile.name);
+                    } else if (kind === 'csv') {
+                        csvFileName.value = recentFile.name;
+                        csvContent.value = recentFile.content;
+                    }
+                };
                 
                 // UPDATED: Load/Save Chat History
                 const loadChatHistory = (fileName) => {
@@ -929,11 +984,15 @@
                     // Load history immediately on upload
                     loadChatHistory(f.name);
                     const r = new FileReader(); 
-                    r.onload = (ev) => ddlContent.value = ev.target.result; 
+                    r.onload = (ev) => {
+                        ddlContent.value = ev.target.result;
+                        saveInputFileLocally('ddl', f.name, ddlContent.value);
+                    }; 
                     r.readAsText(f); 
                 };
                 
-                const handleCSVUpload = (e) => { const f = e.target.files[0]; if(!f) return; csvFileName.value = f.name; const r = new FileReader(); r.onload = (ev) => csvContent.value = ev.target.result; r.readAsText(f); };
+                const handleCSVUpload = (e) => { const f = e.target.files[0]; if(!f) return; csvFileName.value = f.name; const r = new FileReader(); r.onload = (ev) => { csvContent.value = ev.target.result; saveInputFileLocally('csv', f.name, csvContent.value); }; r.readAsText(f); };
+                loadSavedInputFiles();
                 const copyText = (text) => { if (!text) { console.warn("Nothing to copy"); return; } if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(() => showCopySuccess()).catch(err => fallbackCopy(text)); } else { fallbackCopy(text); } };
                 const fallbackCopy = (text) => { const textArea = document.createElement("textarea"); textArea.value = text; textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.style.top = "0"; textArea.style.zIndex = "99999"; document.body.appendChild(textArea); textArea.focus(); textArea.select(); try { document.execCommand('copy'); showCopySuccess(); } catch (err) { alert("Copy failed."); } document.body.removeChild(textArea); };
                 const showCopySuccess = () => { copySuccess.value = true; setTimeout(() => copySuccess.value = false, 2000); };
@@ -1757,6 +1816,7 @@ inventory_logs,System,3,,,Y`;
                     impactSearchMode, totalImpactCount,
                     activeTriggers,
                     isProcessing,
+                    savedInputFiles,
                     customFlagNames, 
                     // App Info
                     showVersionModal, moduleVersions,
@@ -1764,6 +1824,7 @@ inventory_logs,System,3,,,Y`;
                     
                     // Functions
                     handleDDLUpload, handleCSVUpload, processFiles, startProcess, reset,
+                    useSavedInputFile,
                     selectTable, selectByName,
                     getTierClass, getDynamicChildCount, getDynamicDescendantCount,
                     toggleTier, toggleLevel, toggleCustomFlag, clearFilters, recalculateAllStats,
