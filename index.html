@@ -401,6 +401,7 @@
                                     <th class="px-4 py-3">Column</th>
                                     <th class="px-4 py-3">Type</th>
                                     <th class="px-4 py-3">Attributes</th>
+                                    <th class="px-4 py-3">Unique Key</th>
                                     <th class="px-4 py-3 text-center">Not Null</th>
                                     <th class="px-4 py-3">FK Reference</th>
                                     <th class="px-4 py-3">Default</th>
@@ -416,11 +417,19 @@
                                         <span v-if="col.isFk" class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded border border-blue-200 mr-1">FK</span>
                                         <span v-if="col.unique" class="bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded border border-purple-200">UQ</span>
                                     </td>
+                                    <td class="px-4 py-2 text-xs">
+                                        <div v-if="col.uniqueConstraints && col.uniqueConstraints.length" class="flex flex-wrap gap-1">
+                                            <span v-for="uq in col.uniqueConstraints" :key="uq.name" class="bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-mono" :title="uq.columns && uq.columns.length > 1 ? uq.columns.join(', ') : ''">
+                                                {{ uq.name }}<span v-if="uq.columns && uq.columns.length > 1" class="text-purple-400"> ({{ uq.columns.join(', ') }})</span>
+                                            </span>
+                                        </div>
+                                        <span v-else class="text-slate-300">-</span>
+                                    </td>
                                     <td class="px-4 py-2 text-xs text-center font-bold text-red-500">{{ col.notNull ? 'Yes' : '' }}</td>
                                     <td class="px-4 py-2 text-xs font-mono text-slate-500"><span v-if="col.fkTarget" class="text-blue-600 bg-blue-50 px-1 rounded">{{ col.fkTarget }}</span></td>
                                     <td class="px-4 py-2 text-xs text-slate-500 font-mono">{{ col.defaultVal || '-' }}</td>
                                 </tr>
-                                <tr v-if="parsedColumns.length === 0"><td colspan="7" class="px-4 py-8 text-center text-slate-400">Parsing failed or no columns found.</td></tr>
+                                <tr v-if="parsedColumns.length === 0"><td colspan="8" class="px-4 py-8 text-center text-slate-400">Parsing failed or no columns found.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1111,8 +1120,20 @@ inventory_logs,System,3,,,Y`;
                     const bodyMatch = cleanRawDDL.match(new RegExp('\\(([\\s\\S]*)\\)'));
                     if (!bodyMatch) return columns;
                     const lines = bodyMatch[1].split(new RegExp('\\r?\\n'));
+                    const uniqueConstraints = [];
+                    const cleanColumnName = (name) => name.trim().replace(/^["']|["']$/g, '');
+                    const splitConstraintColumns = (cols) => cols.split(',').map(cleanColumnName).filter(Boolean);
                     lines.forEach(line => {
                         let l = line.trim().replace(new RegExp(',$'), '');
+                        const uniqueConstraintMatch = l.match(/^(?:CONSTRAINT\s+["']?([a-zA-Z0-9_]+)["']?\s+)?UNIQUE(?:\s+NULLS\s+NOT\s+DISTINCT)?\s*\(([^)]+)\)/i);
+                        if (uniqueConstraintMatch) {
+                            const uqColumns = splitConstraintColumns(uniqueConstraintMatch[2]);
+                            uniqueConstraints.push({
+                                name: uniqueConstraintMatch[1] || `UNIQUE (${uqColumns.join(', ')})`,
+                                columns: uqColumns
+                            });
+                            return;
+                        }
                         if (!l || l.startsWith('--') || l.startsWith('CONSTRAINT') || l.startsWith('KEY') || l.startsWith('PRIMARY KEY') || l.startsWith('INDEX') || l.startsWith('UNIQUE')) return;
                         
                         const colMatch = l.match(/^"?([a-zA-Z0-9_]+)"?\s+([a-z0-9_]+(?:\s*\([^)]+\))?|[\w\[\]]+)(.*)$/i);
@@ -1122,17 +1143,33 @@ inventory_logs,System,3,,,Y`;
                             let rest = colMatch[3];
                             rest = rest.replace(/COMMENT\s+'[^']*'/gi, '').replace(/COMMENT\s+"[^"]*"/gi, '');
                             const restUpper = rest.toUpperCase();
+                            const inlineUniqueName = rest.match(/\bCONSTRAINT\s+["']?([a-zA-Z0-9_]+)["']?\s+UNIQUE\b/i)?.[1];
+                            const inlineUniqueConstraints = restUpper.includes('UNIQUE')
+                                ? [{ name: inlineUniqueName || 'inline UNIQUE', columns: [name] }]
+                                : [];
                             
                             columns.push({ 
                                 name: name, 
                                 type: type, 
                                 notNull: restUpper.includes('NOT NULL'), 
                                 defaultVal: restUpper.includes('DEFAULT') ? restUpper.split('DEFAULT')[1].trim().split(/\s+/)[0].replace(new RegExp("'", 'g'), '').replace(new RegExp(',$'), '') : null, 
-                                unique: restUpper.includes('UNIQUE'), 
+                                unique: inlineUniqueConstraints.length > 0,
+                                uniqueConstraints: inlineUniqueConstraints,
                                 isPk: false, 
                                 isFk: false 
                             });
                         }
+                    });
+                    uniqueConstraints.forEach(uq => {
+                        uq.columns.forEach(uqCol => {
+                            const col = columns.find(c => c.name.toLowerCase() === uqCol.toLowerCase());
+                            if (!col) return;
+                            col.unique = true;
+                            if (!col.uniqueConstraints) col.uniqueConstraints = [];
+                            if (!col.uniqueConstraints.some(existing => existing.name === uq.name)) {
+                                col.uniqueConstraints.push({ name: uq.name, columns: uq.columns });
+                            }
+                        });
                     });
                     return columns;
                 };
@@ -1396,12 +1433,16 @@ inventory_logs,System,3,,,Y`;
                 const openDataDictModal = () => showDataDictModal.value = true;
                 const exportDataDictCSV = () => { 
                     const cols = parsedColumns.value; 
-                    let csvContent = "data:text/csv;charset=utf-8,No,Column,Type,Attributes,NotNull,FK_Reference,Default\n"; 
+                    let csvContent = "data:text/csv;charset=utf-8,No,Column,Type,Attributes,Unique_Key,NotNull,FK_Reference,Default\n"; 
                     cols.forEach((c, idx) => { 
                         const attrs = [c.isPk?'PK':'', c.isFk?'FK':'', c.unique?'UQ':''].filter(x=>x).join(' '); 
+                        const uniqueKeyVal = (c.uniqueConstraints || []).map(uq => {
+                            const colsLabel = uq.columns && uq.columns.length > 1 ? ` (${uq.columns.join(', ')})` : '';
+                            return `${uq.name}${colsLabel}`;
+                        }).join(' | ');
                         const notNullVal = c.notNull ? 'Yes' : '';
                         const fkRefVal = c.fkTarget || '';
-                        csvContent += `${idx+1},${c.name},"${c.type}",${attrs},${notNullVal},${fkRefVal},${c.defaultVal||''}\n`; 
+                        csvContent += `${idx+1},${c.name},"${c.type}",${attrs},"${uniqueKeyVal}",${notNullVal},${fkRefVal},${c.defaultVal||''}\n`; 
                     }); 
                     const encodedUri = encodeURI(csvContent); 
                     const link = document.createElement("a"); 
