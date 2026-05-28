@@ -380,54 +380,64 @@
         </div>
 
         <!-- Data Dictionary Modal (Instant Data) -->
-        <div v-if="showDataDictModal" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 modal-enter-active">
-            <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[85vh] overflow-hidden">
-                <div class="p-4 bg-teal-700 text-white flex justify-between items-center">
+        <div v-if="showDataDictModal" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-3 modal-enter-active">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-[96vw] xl:max-w-[1480px] flex flex-col max-h-[92vh] overflow-hidden">
+                <div class="p-4 bg-teal-700 text-white flex justify-between items-center gap-3">
                     <!-- UPDATED: Added Badges to Header -->
-                    <h3 class="font-bold flex items-center gap-2">
+                    <h3 class="font-bold flex items-center gap-2 min-w-0 flex-wrap">
                         <i class="ph ph-book-open-text text-teal-300"></i> Data Dictionary: {{ selectedTable?.name }}
                         <span v-if="selectedTable?.isFocus" class="ml-2 text-[10px] bg-slate-700 text-white px-1.5 py-0.5 rounded border border-slate-600 shadow-sm font-normal">FOCUS</span>
                         <span v-for="(val, key) in selectedTable?.flags" :key="key" v-show="val" class="ml-1 text-[10px] bg-teal-600 text-teal-100 px-1.5 py-0.5 rounded border border-teal-500 font-normal">{{ key }}</span>
                     </h3>
-                    <div class="flex items-center gap-2"><button @click="exportDataDictCSV" class="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1"><i class="ph ph-download-simple"></i> CSV</button><button @click="showDataDictModal = false" class="hover:text-teal-200"><i class="ph ph-x text-xl"></i></button></div>
+                    <div class="flex items-center gap-2 shrink-0"><button @click="exportDataDictCSV" class="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1"><i class="ph ph-download-simple"></i> CSV</button><button @click="showDataDictModal = false" class="hover:text-teal-200"><i class="ph ph-x text-xl"></i></button></div>
                 </div>
-                <div class="p-6 overflow-y-auto bg-slate-50 flex-1 flex flex-col gap-6">
+                <div class="p-4 overflow-y-auto bg-slate-50 flex-1 flex flex-col gap-4">
                     <!-- Columns Table -->
-                    <div class="overflow-x-auto rounded-lg border border-slate-200">
-                        <table class="w-full text-sm text-left text-slate-600">
+                    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                        <table class="w-full min-w-[980px] table-fixed text-sm text-left text-slate-600">
+                            <colgroup>
+                                <col class="w-12">
+                                <col class="w-[18%]">
+                                <col class="w-[13%]">
+                                <col class="w-[11%]">
+                                <col class="w-[22%]">
+                                <col class="w-20">
+                                <col class="w-[18%]">
+                                <col class="w-[12%]">
+                            </colgroup>
                             <thead class="text-xs text-slate-700 uppercase bg-slate-100">
                                 <tr>
-                                    <th class="px-4 py-3 w-10 text-center">#</th>
-                                    <th class="px-4 py-3">Column</th>
-                                    <th class="px-4 py-3">Type</th>
-                                    <th class="px-4 py-3">Attributes</th>
-                                    <th class="px-4 py-3">Unique Key</th>
-                                    <th class="px-4 py-3 text-center">Not Null</th>
-                                    <th class="px-4 py-3">FK Reference</th>
-                                    <th class="px-4 py-3">Default</th>
+                                    <th class="px-3 py-3 text-center">#</th>
+                                    <th class="px-3 py-3">Column</th>
+                                    <th class="px-3 py-3">Type</th>
+                                    <th class="px-3 py-3">Attributes</th>
+                                    <th class="px-3 py-3">Unique Key</th>
+                                    <th class="px-3 py-3 text-center">Not Null</th>
+                                    <th class="px-3 py-3">FK Reference</th>
+                                    <th class="px-3 py-3">Default</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr v-for="(col, idx) in parsedColumns" :key="col.name" class="bg-white border-b hover:bg-slate-50">
-                                    <td class="px-4 py-2 text-xs text-center text-slate-400">{{ idx + 1 }}</td>
-                                    <td class="px-4 py-2 font-mono font-medium text-slate-800">{{ col.name }}</td>
-                                    <td class="px-4 py-2 text-blue-600 font-mono text-xs">{{ col.type }}</td>
-                                    <td class="px-4 py-2 text-xs">
+                                    <td class="px-3 py-2 text-xs text-center text-slate-400 align-top">{{ idx + 1 }}</td>
+                                    <td class="px-3 py-2 font-mono font-medium text-slate-800 break-all align-top">{{ col.name }}</td>
+                                    <td class="px-3 py-2 text-blue-600 font-mono text-xs break-words align-top">{{ col.type }}</td>
+                                    <td class="px-3 py-2 text-xs align-top">
                                         <span v-if="col.isPk" class="bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded border border-yellow-200 mr-1">PK</span>
                                         <span v-if="col.isFk" class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded border border-blue-200 mr-1">FK</span>
                                         <span v-if="col.unique" class="bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded border border-purple-200">UQ</span>
                                     </td>
-                                    <td class="px-4 py-2 text-xs">
+                                    <td class="px-3 py-2 text-xs align-top">
                                         <div v-if="col.uniqueConstraints && col.uniqueConstraints.length" class="flex flex-wrap gap-1">
-                                            <span v-for="uq in col.uniqueConstraints" :key="uq.name" class="bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-mono" :title="uq.columns && uq.columns.length > 1 ? uq.columns.join(', ') : ''">
+                                            <span v-for="uq in col.uniqueConstraints" :key="uq.name" class="bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-mono break-all" :title="uq.columns && uq.columns.length > 1 ? uq.columns.join(', ') : ''">
                                                 {{ uq.name }}<span v-if="uq.columns && uq.columns.length > 1" class="text-purple-400"> ({{ uq.columns.join(', ') }})</span>
                                             </span>
                                         </div>
                                         <span v-else class="text-slate-300">-</span>
                                     </td>
-                                    <td class="px-4 py-2 text-xs text-center font-bold text-red-500">{{ col.notNull ? 'Yes' : '' }}</td>
-                                    <td class="px-4 py-2 text-xs font-mono text-slate-500"><span v-if="col.fkTarget" class="text-blue-600 bg-blue-50 px-1 rounded">{{ col.fkTarget }}</span></td>
-                                    <td class="px-4 py-2 text-xs text-slate-500 font-mono">{{ col.defaultVal || '-' }}</td>
+                                    <td class="px-3 py-2 text-xs text-center font-bold text-red-500 align-top">{{ col.notNull ? 'Yes' : '' }}</td>
+                                    <td class="px-3 py-2 text-xs font-mono text-slate-500 break-all align-top"><span v-if="col.fkTarget" class="text-blue-600 bg-blue-50 px-1 rounded">{{ col.fkTarget }}</span></td>
+                                    <td class="px-3 py-2 text-xs text-slate-500 font-mono break-all align-top">{{ col.defaultVal || '-' }}</td>
                                 </tr>
                                 <tr v-if="parsedColumns.length === 0"><td colspan="8" class="px-4 py-8 text-center text-slate-400">Parsing failed or no columns found.</td></tr>
                             </tbody>
@@ -684,7 +694,7 @@
     </script>
 
     <script>
-        const { createApp, ref, computed, reactive, watch, nextTick, shallowRef, onMounted } = Vue;
+        const { createApp, ref, computed, reactive, watch, nextTick, shallowRef, onMounted, onUnmounted } = Vue;
         const TreeNode = { name: 'tree-node', template: '#tree-node-template', props: ['node', 'depth'], emits: ['select'], setup(props) { const isOpen = ref(true); const hasChildren = computed(() => props.node.children && props.node.children.length > 0); const toggle = () => { if(hasChildren.value) isOpen.value = !isOpen.value; }; return { isOpen, hasChildren, toggle }; } };
         
         const ImpactNode = {
@@ -768,14 +778,14 @@
                 // VERSIONING STRATEGY
                 // ---------------------------------------------------------
                 const moduleVersions = reactive({
-                    'App Core': 'v1.14.10',  // Version Bump for Dropdown UI
+                    'App Core': 'v1.14.11',  // Version Bump for ESC modal close
                     'AI Global': 'v2.8',    
                     'Impact Analyst': 'v1.11', 
                     'SQL for application_id': 'v1.2',
                     'Upload': 'v1.5.2', 
                     'AI Text-to-SQL': 'v1.7', // Bump for Oracle Logic
                     'Child tree-view (Hierarchy)': 'v1.0',
-                    'Data dict': 'v1.8',
+                    'Data dict': 'v1.9',
                     'Mock data': 'v1.2', 
                     'Filter': 'v1.2',
                     'Table list view': 'v1.4.0',
@@ -1378,6 +1388,25 @@ inventory_logs,System,3,,,Y`;
                 const calculateAncestorStats = (n) => { if(!n) return {direct:0, total:0}; let dParents = parentMap.value[n] || []; dParents = dParents.filter(p => isVisible(p)); const getAnc = (tName, v=new Set()) => { if(v.has(tName)) return new Set(); v.add(tName); let a = new Set(), parents = parentMap.value[tName] || []; parents = parents.filter(p => isVisible(p)); parents.forEach(p => { a.add(p); getAnc(p, new Set(v)).forEach(x => a.add(x)); }); return a; }; return { direct: dParents.length, total: getAnc(n).size }; };
                 const ancestorStats = computed(() => selectedTable.value ? calculateAncestorStats(selectedTable.value.name) : {direct:0, total:0});
                 const filteredParents = computed(() => selectedTable.value ? (parentMap.value[selectedTable.value.name]||[]).filter(p=>isVisible(p)) : []);
+
+                const closeTopModal = () => {
+                    if (showVersionModal.value) { showVersionModal.value = false; return true; }
+                    if (showDataDictModal.value) { showDataDictModal.value = false; return true; }
+                    if (showMockModal.value) { showMockModal.value = false; return true; }
+                    if (showImpactModal.value) { showImpactModal.value = false; return true; }
+                    if (showAiModal.value) { showAiModal.value = false; return true; }
+                    if (showERDialog.value) { showERDialog.value = false; return true; }
+                    if (showSqlDialog.value) { showSqlDialog.value = false; return true; }
+                    return false;
+                };
+
+                const handleEscapeKey = (event) => {
+                    if (event.key !== 'Escape') return;
+                    if (closeTopModal()) event.preventDefault();
+                };
+
+                onMounted(() => window.addEventListener('keydown', handleEscapeKey));
+                onUnmounted(() => window.removeEventListener('keydown', handleEscapeKey));
 
                 // ---------------------------------------------------------
                 // 6. ACTION FUNCTIONS
